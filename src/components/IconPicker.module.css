@@ -1,0 +1,126 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+  overflow: visible;
+}
+
+.combobox {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.combobox:focus-within {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 1px;
+}
+
+.searchInput {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  font-size: 0.9rem;
+  color: #222;
+}
+
+.searchInput::placeholder {
+  color: #888;
+}
+
+.iconBtn {
+  border: none;
+  background: transparent;
+  color: #666;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.15rem;
+}
+
+.iconBtn:disabled {
+  color: #aaa;
+  cursor: not-allowed;
+}
+
+.options {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  max-height: 210px;
+  overflow-y: auto;
+}
+
+.option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border: none;
+  border-bottom: 1px solid #eee;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.option:last-child {
+  border-bottom: none;
+}
+
+.option:hover {
+  background: var(--color-primary-soft);
+}
+
+.option:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.optionSelected {
+  background: var(--color-primary-soft-strong);
+}
+
+.thumb {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+}
+
+.thumb svg {
+  width: 20px;
+  height: 20px;
+}
+
+.optionLabel {
+  font-size: 0.86rem;
+}
+
+.empty {
+  font-size: 0.82rem;
+  color: #777;
+  padding: 0.55rem;
+}
+
+.selectionMeta {
+  font-size: 0.78rem;
+  color: #666;
+}

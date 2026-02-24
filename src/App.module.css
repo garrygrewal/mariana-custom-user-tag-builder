@@ -1,0 +1,120 @@
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(320px, 36%) 1fr;
+}
+
+.sidebar {
+  background: #fff;
+  box-shadow: 8px 0 32px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebarContent {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  flex: 1;
+}
+
+.sidebarActions {
+  margin-top: 1.25rem;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 0.75rem;
+  max-width: 520px;
+}
+
+.sidebarHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.logo {
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+
+.title {
+  font-size: clamp(1.25rem, 1.6vw, 1.5rem);
+  font-weight: 500;
+  color: #111;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.previewPane {
+  background: #f7f7f7;
+  padding: 2rem 2.2rem;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.previewBody {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 360px;
+  padding: 1.2rem 0;
+}
+
+.previewDivider {
+  border: none;
+  border-top: 4px solid #d7d7d7;
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 980px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 1.25rem;
+  }
+
+  .sidebarContent {
+    max-width: none;
+  }
+
+  .sidebarActions {
+    max-width: none;
+    position: static;
+    padding-top: 0;
+  }
+
+  .title {
+    font-size: 1.2rem;
+  }
+
+  .logo {
+    width: 40px;
+    height: 40px;
+  }
+
+  .previewPane {
+    padding: 1.25rem;
+    min-height: 360px;
+  }
+
+  .previewBody {
+    min-height: 300px;
+    padding: 0.5rem 0;
+  }
+
+  .previewDivider {
+    margin-top: 1rem;
+  }
+}
