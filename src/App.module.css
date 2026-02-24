@@ -67,7 +67,7 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  font-size: clamp(1.25rem, 1.6vw, 1.5rem);
+  font-size: 1.5rem;
   font-weight: 500;
   color: #111;
   line-height: 1.2;
@@ -112,10 +112,6 @@
     position: static;
     box-shadow: none;
     padding-top: 0.5rem;
-  }
-
-  .title {
-    font-size: 1.2rem;
   }
 
   .logo {
