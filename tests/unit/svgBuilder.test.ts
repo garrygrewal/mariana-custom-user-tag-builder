@@ -32,6 +32,22 @@ describe('buildTagSvg — text mode', () => {
     expect(svg).toContain('>AB</text>');
   });
 
+  it('renders outlined text path when provided', () => {
+    const svg = buildTagSvg({
+      config: baseConfig,
+      fgHex: '#FFFFFF',
+      outlinedTextPath: {
+        d: 'M0 0L1 1Z',
+        translateX: 1.5,
+        translateY: 2.5,
+      },
+    });
+    expect(svg).toContain('<path d="M0 0L1 1Z"');
+    expect(svg).toContain('transform="translate(1.5,2.5)"');
+    expect(svg).toContain('fill="#FFFFFF"');
+    expect(svg).not.toContain('<text');
+  });
+
   it('applies text-anchor middle and dominant-baseline central', () => {
     const svg = buildTagSvg({ config: baseConfig, fgHex: '#000000' });
     expect(svg).toContain('text-anchor="middle"');

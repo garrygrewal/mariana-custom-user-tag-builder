@@ -45,7 +45,7 @@ src/
   constants.ts    Tag dimensions, font config, contrast thresholds
   types.ts        Shared TypeScript interfaces
 icons/            Source SVGs (auto-discovered at build time)
-public/fonts/     Proxima Nova ExtraBold .ttf for @font-face + SVG embedding
+public/fonts/     Proxima Nova ExtraBold font assets for in-app rendering
 tests/
   unit/           Vitest unit tests
   integration/    Vitest component integration tests
@@ -54,8 +54,9 @@ tests/
 
 ## Export Details
 
-- **SVG**: 30×30 viewBox. Font embedded as base64 for portability.
-- **PNG**: 30×30 rasterized via Canvas from the font-embedded SVG.
+- **SVG**: 30×30 viewBox. Text exports are converted to vector paths for
+  consistent rendering across tools (including Figma) without font embedding.
+- **PNG**: 30×30 rasterized via Canvas from the same SVG markup.
 - **ZIP**: Contains both files. Filename format:
   `custom-tag_<slug>_<text|icon>_<bgHex>.zip`
 
@@ -73,6 +74,16 @@ at build time via Vite glob import. Requirements:
   computed foreground color at render time.
 - Icon ID is derived from the filename (e.g. `my-icon.svg` → id `my-icon`).
 
+## Known Limitations
+
+- **Font license**: Proxima Nova is a commercial font. The included .ttf must
+  be properly licensed for your use case. If unavailable, the fallback stack
+  (`Arial`, `sans-serif`) activates automatically.
+- **Text editability tradeoff**: Outlined text in exported SVG files is not
+  directly editable as text in design tools.
+- **PNG text rendering**: Depends on the browser's Canvas text rasterizer.
+  Minor sub-pixel differences may appear across browsers.
+- **No auth/API**: This is a fully client-side tool with no server component.
 
 ## Tech Stack
 

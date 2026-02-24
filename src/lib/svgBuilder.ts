@@ -12,6 +12,7 @@ import {
   ICON_FIT_RATIO,
 } from '../constants';
 import { ICON_REGISTRY } from './icons';
+import type { OutlinedTextPath } from './textToPath';
 
 const PAINT_ATTR_RE = /\b(fill|stroke)\s*=\s*(["'])([^"']+)\2/gi;
 const PAINT_STYLE_RE = /\b(fill|stroke)\s*:\s*([^;]+)/gi;
@@ -142,12 +143,22 @@ interface BuildOptions {
   fgHex: string;
   /** Base64-encoded font data for portable .svg export */
   fontBase64?: string;
+  fontMime?: 'font/woff2' | 'font/truetype';
+  fontFormat?: 'woff2' | 'truetype';
+  outlinedTextPath?: OutlinedTextPath | null;
 }
 
 /**
  * Build a complete SVG string for the tag.
  */
-export function buildTagSvg({ config, fgHex, fontBase64 }: BuildOptions): string {
+export function buildTagSvg({
+  config,
+  fgHex,
+  fontBase64,
+  fontMime = 'font/truetype',
+  fontFormat = 'truetype',
+  outlinedTextPath,
+}: BuildOptions): string {
   const { mode, text, bgHex } = config;
   const size = EXPORT_SIZE;
   const r = TAG_RADIUS;
@@ -158,7 +169,7 @@ export function buildTagSvg({ config, fgHex, fontBase64 }: BuildOptions): string
     <defs><style>
       @font-face {
         font-family: "${FONT_FAMILY}";
-        src: url("data:font/truetype;base64,${fontBase64}") format("truetype");
+        src: url("data:${fontMime};base64,${fontBase64}") format("${fontFormat}");
         font-weight: ${FONT_WEIGHT};
       }
     </style></defs>`;
@@ -167,14 +178,18 @@ export function buildTagSvg({ config, fgHex, fontBase64 }: BuildOptions): string
   let content = '';
 
   if (mode === 'text') {
-    const fontSize = fitFontSize(text);
-    const fontFamilyAttr = `'${FONT_FALLBACK_STACK}'`;
-    content = `<text
-      x="${r}" y="${r}"
-      text-anchor="middle" dominant-baseline="central"
-      font-family=${fontFamilyAttr}
-      font-weight="${FONT_WEIGHT}" font-size="${fontSize}"
-      fill="${fgHex}">${escapeXml(text)}</text>`;
+    if (outlinedTextPath) {
+      content = `<path d="${outlinedTextPath.d}" transform="translate(${outlinedTextPath.translateX},${outlinedTextPath.translateY})" fill="${fgHex}" />`;
+    } else {
+      const fontSize = fitFontSize(text);
+      const fontFamilyAttr = `'${FONT_FALLBACK_STACK}'`;
+      content = `<text
+        x="${r}" y="${r}"
+        text-anchor="middle" dominant-baseline="central"
+        font-family=${fontFamilyAttr}
+        font-weight="${FONT_WEIGHT}" font-size="${fontSize}"
+        fill="${fgHex}">${escapeXml(text)}</text>`;
+    }
   } else {
     const icon = resolveIcon(config);
     if (icon) {

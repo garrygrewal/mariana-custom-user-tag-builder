@@ -24,4 +24,22 @@ export const EXPORT_SIZE = 30;
 export const ICON_FIT_RATIO = 0.6;
 
 export const FONT_FALLBACK_STACK = '"Proxima Nova", "Arial", sans-serif';
-export const FONT_ASSET_PATH = '/fonts/proxima-nova-extrabold.ttf';
+
+export interface FontAssetSource {
+  path: string;
+  mime: 'font/woff2' | 'font/truetype';
+  format: 'woff2' | 'truetype';
+}
+
+export const FONT_ASSET_SOURCES: FontAssetSource[] = [
+  {
+    path: '/fonts/proxima-nova-extrabold.woff2',
+    mime: 'font/woff2',
+    format: 'woff2',
+  },
+  {
+    path: '/fonts/proxima-nova-extrabold.ttf',
+    mime: 'font/truetype',
+    format: 'truetype',
+  },
+];
