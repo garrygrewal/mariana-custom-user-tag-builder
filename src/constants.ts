@@ -25,6 +25,14 @@ export const ICON_FIT_MAX_WIDTH_RATIO = 0.8;
 /** Max icon height as a fraction of the 30x30 canvas */
 export const ICON_FIT_MAX_HEIGHT_RATIO = 0.72;
 
+/**
+ * Small per-icon optical nudges (in export/viewBox px) for icons that look
+ * visually off-center even when mathematically centered by bounds.
+ */
+export const ICON_OPTICAL_OFFSET_PX: Record<string, { x: number; y: number }> = {
+  play: { x: 2.0, y: 0 },
+};
+
 export const FONT_FALLBACK_STACK = '"Proxima Nova", "Arial", sans-serif';
 
 export interface FontAssetSource {

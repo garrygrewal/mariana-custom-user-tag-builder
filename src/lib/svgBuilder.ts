@@ -11,6 +11,7 @@ import {
   FONT_FALLBACK_STACK,
   ICON_FIT_MAX_WIDTH_RATIO,
   ICON_FIT_MAX_HEIGHT_RATIO,
+  ICON_OPTICAL_OFFSET_PX,
 } from '../constants';
 import { ICON_REGISTRY } from './icons';
 import type { OutlinedTextPath } from './textToPath';
@@ -338,6 +339,12 @@ export function buildTagSvg({
         const contentCenterY = contentBounds.y + contentBounds.height / 2;
         tx = size / 2 - contentCenterX * scale;
         ty = size / 2 - contentCenterY * scale;
+      }
+
+      const opticalOffset = ICON_OPTICAL_OFFSET_PX[icon.id];
+      if (opticalOffset) {
+        tx += opticalOffset.x;
+        ty += opticalOffset.y;
       }
 
       const inner = recolorIconPaint(extractSvgInner(icon.svgContent), fgHex);
