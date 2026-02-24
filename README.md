@@ -74,16 +74,7 @@ at build time via Vite glob import. Requirements:
   computed foreground color at render time.
 - Icon ID is derived from the filename (e.g. `my-icon.svg` → id `my-icon`).
 
-## Known Limitations
 
-- **Font license**: Proxima Nova is a commercial font. The included .ttf must
-  be properly licensed for your use case. If unavailable, the fallback stack
-  (`Arial`, `sans-serif`) activates automatically.
-- **Text editability tradeoff**: Outlined text in exported SVG files is not
-  directly editable as text in design tools.
-- **PNG text rendering**: Depends on the browser's Canvas text rasterizer.
-  Minor sub-pixel differences may appear across browsers.
-- **No auth/API**: This is a fully client-side tool with no server component.
 
 ## Tech Stack
 
