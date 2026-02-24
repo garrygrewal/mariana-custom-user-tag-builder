@@ -1,4 +1,28 @@
 @font-face {
+  font-family: 'Nouvelle Grotesk';
+  src: url('/fonts/NNNouvelleGroteskSTD-Normal.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nouvelle Grotesk';
+  src: url('/fonts/NNNouvelleGroteskSTD-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Nouvelle Grotesk';
+  src: url('/fonts/NNNouvelleGroteskSTD-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
   font-family: 'Proxima Nova';
   src:
     url('/fonts/proxima-nova-extrabold.woff2') format('woff2'),

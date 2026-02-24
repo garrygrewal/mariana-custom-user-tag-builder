@@ -1,13 +1,12 @@
 .layout {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: minmax(320px, 36%) 1fr;
+  grid-template-columns: 600px minmax(0, 1fr);
 }
 
 .sidebar {
   background: #fff;
   box-shadow: 8px 0 32px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -15,37 +14,59 @@
   z-index: 1;
 }
 
+.sidebarTop {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #fff;
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.06),
+    0 10px 24px -20px rgba(0, 0, 0, 0.45);
+}
+
 .sidebarContent {
-  max-width: 520px;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   flex: 1;
+  padding: 1.4rem clamp(1.25rem, 4vw, 2rem) 0;
+  box-sizing: border-box;
 }
 
 .sidebarActions {
   margin-top: 1.25rem;
   position: sticky;
   bottom: 0;
+  width: 100%;
   background: #fff;
-  padding-top: 0.75rem;
-  max-width: 520px;
+  padding: 0.75rem clamp(1.25rem, 4vw, 2rem) 1.35rem;
+  box-shadow: 0 -12px 20px -22px rgba(0, 0, 0, 0.6);
+  box-sizing: border-box;
 }
 
 .sidebarHeader {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0;
+  padding: 1.15rem 0.75rem;
 }
 
 .logo {
-  width: 48px;
   height: 48px;
+  width: auto;
   flex-shrink: 0;
   object-fit: contain;
 }
 
 .title {
+  font-family:
+    'Nouvelle Grotesk',
+    'Proxima Nova',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   font-size: clamp(1.25rem, 1.6vw, 1.5rem);
   font-weight: 500;
   color: #111;
@@ -81,18 +102,16 @@
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
-    padding: 1.25rem;
-  }
-
   .sidebarContent {
     max-width: none;
+    padding-top: 1.1rem;
   }
 
   .sidebarActions {
     max-width: none;
     position: static;
-    padding-top: 0;
+    box-shadow: none;
+    padding-top: 0.5rem;
   }
 
   .title {
@@ -100,8 +119,8 @@
   }
 
   .logo {
-    width: 40px;
     height: 40px;
+    width: auto;
   }
 
   .previewPane {

@@ -2,7 +2,7 @@ export const TAG_DIAMETER = 30;
 export const TAG_RADIUS = TAG_DIAMETER / 2;
 
 export const TEXT_MAX_LENGTH = 3;
-export const TEXT_PATTERN = /^[A-Z0-9]{0,3}$/;
+export const TEXT_PATTERN = /^[A-Z0-9.]{0,3}$/;
 
 export const LABEL_MAX_LENGTH = 100;
 
@@ -20,8 +20,10 @@ export const CONTRAST_THRESHOLD_BG_WHITE = 2.0;
 
 /** Both SVG viewBox and PNG raster target are 30x30 */
 export const EXPORT_SIZE = 30;
-/** Target max icon box size as a fraction of the 30x30 canvas */
-export const ICON_FIT_RATIO = 0.6;
+/** Max icon width as a fraction of the 30x30 canvas (helps wide icons) */
+export const ICON_FIT_MAX_WIDTH_RATIO = 0.8;
+/** Max icon height as a fraction of the 30x30 canvas */
+export const ICON_FIT_MAX_HEIGHT_RATIO = 0.72;
 
 export const FONT_FALLBACK_STACK = '"Proxima Nova", "Arial", sans-serif';
 

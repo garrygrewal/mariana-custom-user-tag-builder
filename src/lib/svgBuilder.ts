@@ -1,4 +1,4 @@
-import type { TagConfig } from '../types';
+import type { TagConfig, IconDef } from '../types';
 import {
   EXPORT_SIZE,
   TAG_RADIUS,
@@ -9,7 +9,8 @@ import {
   FONT_SIZE_2_CHAR,
   FONT_SIZE_3_CHAR,
   FONT_FALLBACK_STACK,
-  ICON_FIT_RATIO,
+  ICON_FIT_MAX_WIDTH_RATIO,
+  ICON_FIT_MAX_HEIGHT_RATIO,
 } from '../constants';
 import { ICON_REGISTRY } from './icons';
 import type { OutlinedTextPath } from './textToPath';
@@ -101,6 +102,47 @@ function extractSvgInner(raw: string): string {
   return raw.replace(/<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '').trim();
 }
 
+const ROOT_PRESENTATION_ATTRS = [
+  'fill',
+  'stroke',
+  'stroke-width',
+  'stroke-linecap',
+  'stroke-linejoin',
+  'stroke-miterlimit',
+  'stroke-dasharray',
+  'stroke-dashoffset',
+  'stroke-opacity',
+  'fill-opacity',
+  'opacity',
+];
+
+function escapeAttrValue(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+/**
+ * Preserve inheritable presentation attributes from the source <svg> root.
+ * This avoids losing semantics like `fill="none"` when we strip the wrapper.
+ */
+function extractRootPresentationAttrs(raw: string): string {
+  const rootMatch = raw.match(/<svg\b([^>]*)>/i);
+  if (!rootMatch) return '';
+
+  const rootAttrs = rootMatch[1];
+  const attrs: string[] = [];
+  for (const attr of ROOT_PRESENTATION_ATTRS) {
+    const re = new RegExp(`\\b${attr}\\s*=\\s*(["'])(.*?)\\1`, 'i');
+    const match = rootAttrs.match(re);
+    if (!match) continue;
+    attrs.push(`${attr}="${escapeAttrValue(match[2])}"`);
+  }
+
+  return attrs.length > 0 ? ` ${attrs.join(' ')}` : '';
+}
+
 function shouldPreservePaint(value: string): boolean {
   const v = value.trim().toLowerCase();
   return (
@@ -132,10 +174,100 @@ function recolorIconPaint(raw: string, fgHex: string): string {
 }
 
 function resolveIcon(config: TagConfig) {
-  if (config.uploadedIcon?.id === config.iconId) {
-    return config.uploadedIcon;
-  }
   return ICON_REGISTRY.find((i) => i.id === config.iconId) ?? null;
+}
+
+interface IconBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+const iconBoundsCache = new Map<string, IconBounds | null>();
+
+function isValidBounds(bounds: IconBounds | null): bounds is IconBounds {
+  if (!bounds) return false;
+  return (
+    Number.isFinite(bounds.x) &&
+    Number.isFinite(bounds.y) &&
+    Number.isFinite(bounds.width) &&
+    Number.isFinite(bounds.height) &&
+    bounds.width > 0 &&
+    bounds.height > 0
+  );
+}
+
+/**
+ * Best-effort measurement of rendered icon content bounds.
+ * In non-browser/test environments where SVG getBBox is unavailable,
+ * returns null and callers fall back to viewBox centering.
+ */
+function measureIconContentBounds(icon: IconDef): IconBounds | null {
+  if (iconBoundsCache.has(icon.id)) {
+    return iconBoundsCache.get(icon.id) ?? null;
+  }
+  if (typeof document === 'undefined' || !document.body) {
+    iconBoundsCache.set(icon.id, null);
+    return null;
+  }
+
+  let host: HTMLDivElement | null = null;
+  try {
+    host = document.createElement('div');
+    host.style.position = 'absolute';
+    host.style.left = '-99999px';
+    host.style.top = '-99999px';
+    host.style.width = '0';
+    host.style.height = '0';
+    host.style.overflow = 'hidden';
+    host.style.pointerEvents = 'none';
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', icon.viewBox);
+    svg.setAttribute('width', '0');
+    svg.setAttribute('height', '0');
+
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.innerHTML = extractSvgInner(icon.svgContent);
+    svg.appendChild(g);
+    host.appendChild(svg);
+    document.body.appendChild(host);
+
+    const graphics = g as unknown as SVGGraphicsElement;
+    if (!graphics.getBBox) {
+      iconBoundsCache.set(icon.id, null);
+      return null;
+    }
+
+    const box = graphics.getBBox();
+    const measured: IconBounds = {
+      x: box.x,
+      y: box.y,
+      width: box.width,
+      height: box.height,
+    };
+    const result = isValidBounds(measured) ? measured : null;
+    iconBoundsCache.set(icon.id, result);
+    return result;
+  } catch {
+    iconBoundsCache.set(icon.id, null);
+    return null;
+  } finally {
+    if (host && host.parentNode) {
+      host.parentNode.removeChild(host);
+    }
+  }
+}
+
+function computeIconScale(size: number, vbW: number, vbH: number): number {
+  if (!Number.isFinite(vbW) || !Number.isFinite(vbH) || vbW <= 0 || vbH <= 0) {
+    return 1;
+  }
+
+  const maxW = size * ICON_FIT_MAX_WIDTH_RATIO;
+  const maxH = size * ICON_FIT_MAX_HEIGHT_RATIO;
+  return Math.min(maxW / vbW, maxH / vbH);
 }
 
 interface BuildOptions {
@@ -194,16 +326,24 @@ export function buildTagSvg({
     const icon = resolveIcon(config);
     if (icon) {
       const vbParts = icon.viewBox.split(/\s+/).map(Number);
-      const [, , vbW, vbH] = vbParts;
-      const iconFit = size * ICON_FIT_RATIO;
-      const scale = iconFit / Math.max(vbW, vbH);
-      const scaledW = vbW * scale;
-      const scaledH = vbH * scale;
-      const tx = (size - scaledW) / 2;
-      const ty = (size - scaledH) / 2;
-      const inner = recolorIconPaint(extractSvgInner(icon.svgContent), fgHex);
+      const [vbMinX = 0, vbMinY = 0, vbW = 0, vbH = 0] = vbParts;
+      const scale = computeIconScale(size, vbW, vbH);
+      const contentBounds = measureIconContentBounds(icon);
 
-      content = `<g transform="translate(${tx},${ty}) scale(${scale})">${inner}</g>`;
+      let tx = (size - vbW * scale) / 2 - vbMinX * scale;
+      let ty = (size - vbH * scale) / 2 - vbMinY * scale;
+
+      if (isValidBounds(contentBounds)) {
+        const contentCenterX = contentBounds.x + contentBounds.width / 2;
+        const contentCenterY = contentBounds.y + contentBounds.height / 2;
+        tx = size / 2 - contentCenterX * scale;
+        ty = size / 2 - contentCenterY * scale;
+      }
+
+      const inner = recolorIconPaint(extractSvgInner(icon.svgContent), fgHex);
+      const inheritedRootAttrs = extractRootPresentationAttrs(icon.svgContent);
+
+      content = `<g transform="translate(${tx},${ty}) scale(${scale})"${inheritedRootAttrs}>${inner}</g>`;
     }
   }
 

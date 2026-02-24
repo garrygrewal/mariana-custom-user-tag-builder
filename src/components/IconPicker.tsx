@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ICON_REGISTRY } from '../lib/icons';
-import type { IconDef } from '../types';
 import styles from './IconPicker.module.css';
 
 const DISPLAY_PAINT_ATTR_RE =
@@ -16,39 +15,30 @@ function recolorDisplayPaint(svgContent: string): string {
 
 interface Props {
   selectedId: string;
-  uploadedIcon?: IconDef | null;
   onSelect: (id: string) => void;
 }
 
-export default function IconPicker({
-  selectedId,
-  uploadedIcon = null,
-  onSelect,
-}: Props) {
+export default function IconPicker({ selectedId, onSelect }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const iconOptions = useMemo(() => {
-    if (!uploadedIcon) return ICON_REGISTRY;
-    return [uploadedIcon, ...ICON_REGISTRY.filter((icon) => icon.id !== uploadedIcon.id)];
-  }, [uploadedIcon]);
-
   const normalizedQuery = query.trim().toLowerCase();
   const filteredIcons = useMemo(
-    () =>
-      iconOptions.filter((icon) => {
+    () => {
+      return ICON_REGISTRY.filter((icon) => {
         if (!normalizedQuery) return true;
         return (
           icon.label.toLowerCase().includes(normalizedQuery) ||
           icon.id.toLowerCase().includes(normalizedQuery)
         );
-      }),
-    [iconOptions, normalizedQuery],
+      });
+    },
+    [normalizedQuery],
   );
 
-  const selectedIcon = iconOptions.find((icon) => icon.id === selectedId) ?? null;
+  const selectedIcon = ICON_REGISTRY.find((icon) => icon.id === selectedId) ?? null;
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
       const target = event.target as Node;
@@ -62,7 +52,7 @@ export default function IconPicker({
 
   const selectedLabel = selectedIcon?.label ?? '';
   const showSelectedInField = Boolean(selectedLabel) && query.length === 0;
-  const noIcons = iconOptions.length === 0;
+  const noIcons = ICON_REGISTRY.length === 0;
   const noMatches = filteredIcons.length === 0;
   const selectedThumbSvg = selectedIcon
     ? recolorDisplayPaint(selectedIcon.svgContent)
@@ -105,29 +95,29 @@ export default function IconPicker({
             onClick={() => {
               onSelect('');
               setQuery('');
-              setOpen(true);
+              setOpen(false);
               inputRef.current?.focus();
             }}
           >
             ×
           </button>
-        ) : null}
-
-        <button
-          type="button"
-          className={styles.iconBtn}
-          aria-label="Select icon"
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          onClick={() => {
-            if (noIcons) return;
-            setOpen((v) => !v);
-            inputRef.current?.focus();
-          }}
-          disabled={noIcons}
-        >
-          {open ? '▴' : '▾'}
-        </button>
+        ) : (
+          <button
+            type="button"
+            className={`${styles.iconBtn} ${styles.chevronBtn}`}
+            aria-label="Select icon"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            onClick={() => {
+              if (noIcons) return;
+              setOpen((v) => !v);
+              inputRef.current?.focus();
+            }}
+            disabled={noIcons}
+          >
+            {open ? '▴' : '▾'}
+          </button>
+        )}
       </div>
 
       {open ? (

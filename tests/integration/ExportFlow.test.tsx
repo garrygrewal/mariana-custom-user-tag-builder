@@ -70,7 +70,13 @@ describe('Export flow integration', () => {
     const iconToggle = screen.getByRole('button', { name: /^Icon$/ });
     fireEvent.click(iconToggle);
 
-    fireEvent.click(screen.getByRole('button', { name: /select icon/i }));
+    const selectIconBtn = screen.queryByRole('button', { name: /select icon/i });
+    if (selectIconBtn) {
+      fireEvent.click(selectIconBtn);
+    } else {
+      fireEvent.focus(screen.getByRole('textbox', { name: /search icons/i }));
+    }
+
     const options = screen.getAllByRole('option');
     expect(options.length).toBeGreaterThan(0);
     expect(options[0].querySelector('svg')).not.toBeNull();
@@ -95,7 +101,7 @@ describe('Export flow integration', () => {
     fireEvent.change(textInput, { target: { value: 'A!' } });
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /only a.z and 0.9 are allowed/i,
+      /only a.z, 0.9, and "\." are allowed/i,
     );
   });
 
@@ -111,51 +117,24 @@ describe('Export flow integration', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('uploads a custom svg icon and exports with uploaded icon selection', async () => {
+  it('accepts "." in text tags and exports dotted text value', async () => {
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: /^Icon$/ }));
+    const textInput = screen.getByLabelText(/text \(a-z/i);
+    fireEvent.change(textInput, { target: { value: 'A.' } });
 
-    const svgFile = new File(
-      [
-        '<svg viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path d="M2 2L18 18" fill="white" /></svg>',
-      ],
-      'my-custom.svg',
-      { type: 'image/svg+xml' },
-    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/upload svg icon file/i), {
-      target: { files: [svgFile] },
-    });
+    const btn = screen.getByRole('button', { name: /download zip/i });
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
 
-    await waitFor(() => {
-      expect(
-        screen.getByRole('button', { name: /remove uploaded icon/i }),
-      ).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: /download zip/i }));
     await waitFor(() => {
       expect(exportTagZip).toHaveBeenCalledTimes(1);
     });
 
     const call = vi.mocked(exportTagZip).mock.calls[0][0];
-    expect(call.mode).toBe('icon');
-    expect(call.iconId).toBe('uploaded-my-custom');
-    expect(call.uploadedIcon?.id).toBe('uploaded-my-custom');
-  });
-
-  it('shows upload error for non-svg files', async () => {
-    render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /^Icon$/ }));
-
-    const badFile = new File(['hello'], 'note.txt', { type: 'text/plain' });
-    fireEvent.change(screen.getByLabelText(/upload svg icon file/i), {
-      target: { files: [badFile] },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByRole('alert')).toHaveTextContent(/upload a \.svg file/i);
-    });
+    expect(call.mode).toBe('text');
+    expect(call.text).toBe('A.');
   });
 });

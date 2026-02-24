@@ -202,6 +202,55 @@ describe('buildTagSvg — icon mode', () => {
     expect(svg).toContain('<circle');
     expect(svg).toContain('fill="#FF5733"');
   });
+
+  it('scales wide milestone-like icons larger without clipping', () => {
+    const iconId = '__wide-icon-fit-test__';
+    ICON_REGISTRY.push({
+      id: iconId,
+      label: 'Wide Icon Fit Test',
+      viewBox: '0 0 25 9',
+      svgContent:
+        '<svg viewBox="0 0 25 9" fill="none"><path d="M0 0H25V9H0Z" fill="white"/></svg>',
+    });
+
+    try {
+      const config: TagConfig = { ...baseConfig, mode: 'icon', iconId };
+      const svg = buildTagSvg({ config, fgHex: '#000000' });
+      const scaleMatch = svg.match(/scale\(([^)]+)\)/);
+      expect(scaleMatch).not.toBeNull();
+      const scale = Number(scaleMatch![1]);
+
+      // Previous single-ratio fit produced 0.72 for 25x9; this should be larger.
+      expect(scale).toBeGreaterThan(0.72);
+      // Width cap should still prevent clipping outside the circle canvas.
+      expect(scale).toBeLessThanOrEqual(0.96);
+    } finally {
+      const i = ICON_REGISTRY.findIndex((icon) => icon.id === iconId);
+      if (i >= 0) ICON_REGISTRY.splice(i, 1);
+    }
+  });
+
+  it('preserves root fill="none" so stroke-only icons do not default to black fill', () => {
+    const iconId = '__root-fill-none-test__';
+    ICON_REGISTRY.push({
+      id: iconId,
+      label: 'Root Fill None Test',
+      viewBox: '0 0 10 10',
+      svgContent:
+        '<svg viewBox="0 0 10 10" fill="none"><path d="M1 1L9 9" stroke="white" stroke-width="1.5"/></svg>',
+    });
+
+    try {
+      const config: TagConfig = { ...baseConfig, mode: 'icon', iconId };
+      const svg = buildTagSvg({ config, fgHex: '#FFFFFF' });
+      expect(svg).toContain('<g transform=');
+      expect(svg).toContain('fill="none"');
+      expect(svg).toContain('stroke="#FFFFFF"');
+    } finally {
+      const i = ICON_REGISTRY.findIndex((icon) => icon.id === iconId);
+      if (i >= 0) ICON_REGISTRY.splice(i, 1);
+    }
+  });
 });
 
 describe('buildTagSvg — font embedding', () => {

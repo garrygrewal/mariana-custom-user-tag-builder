@@ -14,15 +14,18 @@ export default function App() {
   return (
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
-        <div className={styles.sidebarContent}>
+        <div className={styles.sidebarTop}>
           <header className={styles.sidebarHeader}>
             <img
-              src="/mariana-logo.png"
-              alt="Mariana"
+              src="/xplor-logo.svg"
+              alt="Xplor"
               className={styles.logo}
             />
-            <h1 className={styles.title}>Mariana Custom User Tag Builder</h1>
+            <h1 className={styles.title}>Custom User Tag Builder</h1>
           </header>
+        </div>
+
+        <div className={styles.sidebarContent}>
           <TagForm state={state} dispatch={dispatch} warnings={derived.warnings} />
         </div>
         <div className={styles.sidebarActions}>
