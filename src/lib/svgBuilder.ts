@@ -175,6 +175,7 @@ function recolorIconPaint(raw: string, fgHex: string): string {
 }
 
 function resolveIcon(config: TagConfig) {
+  if (config.uploadedIcon) return config.uploadedIcon;
   return ICON_REGISTRY.find((i) => i.id === config.iconId) ?? null;
 }
 

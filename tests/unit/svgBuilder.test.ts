@@ -251,6 +251,26 @@ describe('buildTagSvg — icon mode', () => {
       if (i >= 0) ICON_REGISTRY.splice(i, 1);
     }
   });
+
+  it('renders uploaded icon content when iconId is empty', () => {
+    const config: TagConfig = {
+      ...baseConfig,
+      mode: 'icon',
+      iconId: '',
+      uploadedIcon: {
+        id: 'custom-upload',
+        label: 'Custom Upload',
+        viewBox: '0 0 12 12',
+        svgContent:
+          '<svg viewBox="0 0 12 12"><path d="M1 1h10v10H1z" fill="white"/></svg>',
+      },
+    };
+
+    const svg = buildTagSvg({ config, fgHex: '#000000' });
+    expect(svg).toContain('<g transform=');
+    expect(svg).toContain('d="M1 1h10v10H1z"');
+    expect(svg).toContain('fill="#000000"');
+  });
 });
 
 describe('buildTagSvg — font embedding', () => {

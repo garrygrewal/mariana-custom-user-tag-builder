@@ -113,6 +113,27 @@ describe('exportTagZip — svg size optimization', () => {
     expect(vi.mocked(saveAs).mock.calls[1][1]).toBe('custom-tag_star_icon_ff5733.zip');
   });
 
+  it('uses uploaded icon id in filename fallback when iconId is empty', async () => {
+    await exportTagZip({
+      ...testConfig,
+      label: '',
+      mode: 'icon',
+      text: '',
+      iconId: '',
+      uploadedIcon: {
+        id: 'custom-upload',
+        label: 'Custom Upload',
+        svgContent:
+          '<svg viewBox="0 0 24 24"><path d="M0 0h10v10z" fill="white"/></svg>',
+        viewBox: '0 0 24 24',
+      },
+    });
+
+    expect(vi.mocked(saveAs).mock.calls[0][1]).toBe(
+      'custom-tag_custom-upload_icon_ff5733.zip',
+    );
+  });
+
   it('preloads font only for text mode exports', async () => {
     const ensureSpy = vi.spyOn(fontLoader, 'ensureFontLoaded');
     const ttfSpy = vi.spyOn(fontLoader, 'getTrueTypeFontData').mockResolvedValue({

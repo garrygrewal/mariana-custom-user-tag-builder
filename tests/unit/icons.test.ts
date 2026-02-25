@@ -21,9 +21,12 @@ describe('ICON_REGISTRY (auto-discovered)', () => {
     }
   });
 
-  it('derives label as title-cased version of id', () => {
+  it('derives label from id with title-casing', () => {
     for (const icon of ICON_REGISTRY) {
-      expect(icon.label.charAt(0)).toMatch(/[A-Z]/);
+      const expected = icon.id
+        .replace(/[-_]+/g, ' ')
+        .replace(/\b\w/g, (c) => c.toUpperCase());
+      expect(icon.label).toBe(expected);
     }
   });
 

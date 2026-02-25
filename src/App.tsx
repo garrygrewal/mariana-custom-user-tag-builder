@@ -9,7 +9,9 @@ export default function App() {
 
   const canExport =
     /^#[0-9A-Fa-f]{6}$/.test(state.bgHex) &&
-    (state.mode === 'text' ? state.text.length > 0 : state.iconId.length > 0);
+    (state.mode === 'text'
+      ? state.text.length > 0
+      : state.iconId.length > 0 || Boolean(state.uploadedIcon));
 
   return (
     <div className={styles.layout}>

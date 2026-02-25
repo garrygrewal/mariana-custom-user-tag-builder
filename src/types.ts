@@ -13,6 +13,7 @@ export interface TagConfig {
   mode: TagMode;
   text: string;
   iconId: string;
+  uploadedIcon?: IconDef | null;
 }
 
 export interface ContrastWarning {

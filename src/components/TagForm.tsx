@@ -1,4 +1,4 @@
-import { useState, useCallback, type Dispatch } from 'react';
+import { useState, useCallback, useRef, type Dispatch } from 'react';
 import type { TagConfig, TagMode } from '../types';
 import type { TagAction } from '../hooks/useTagState';
 import { TEXT_MAX_LENGTH } from '../constants';
@@ -6,6 +6,7 @@ import HexColorInput from './HexColorInput';
 import IconPicker from './IconPicker';
 import ContrastWarnings from './ContrastWarnings';
 import type { ContrastWarning } from '../types';
+import { parseUploadedIconFile } from '../lib/uploadedIcon';
 import styles from './TagForm.module.css';
 
 interface Props {
@@ -18,6 +19,9 @@ const INVALID_CHARS_RE = /[^A-Za-z0-9.]/;
 
 export default function TagForm({ state, dispatch, warnings }: Props) {
   const [textError, setTextError] = useState('');
+  const [uploadError, setUploadError] = useState('');
+  const [uploadedFileName, setUploadedFileName] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -31,6 +35,35 @@ export default function TagForm({ state, dispatch, warnings }: Props) {
     },
     [dispatch],
   );
+
+  const handleIconUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const input = e.currentTarget;
+      const file = input.files?.[0];
+      if (!file) return;
+      // Always clear browser-native selected filename immediately.
+      input.value = '';
+
+      try {
+        const uploadedIcon = await parseUploadedIconFile(file);
+        dispatch({ type: 'SET_UPLOADED_ICON', payload: uploadedIcon });
+        setUploadedFileName(file.name);
+        setUploadError('');
+      } catch (error) {
+        setUploadedFileName('');
+        setUploadError(
+          error instanceof Error ? error.message : 'Unable to parse SVG file.',
+        );
+      }
+    },
+    [dispatch],
+  );
+
+  const handleClearUpload = useCallback(() => {
+    dispatch({ type: 'SET_UPLOADED_ICON', payload: null });
+    setUploadedFileName('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [dispatch]);
 
   return (
     <div className={styles.form}>
@@ -87,10 +120,59 @@ export default function TagForm({ state, dispatch, warnings }: Props) {
           <label>Icon</label>
           <IconPicker
             selectedId={state.iconId}
-            onSelect={(id) =>
-              dispatch({ type: 'SET_ICON_ID', payload: id })
-            }
+            onSelect={(id) => {
+              dispatch({ type: 'SET_ICON_ID', payload: id });
+              setUploadError('');
+              setUploadedFileName('');
+              if (fileInputRef.current) fileInputRef.current.value = '';
+            }}
           />
+          <div className={styles.uploadSection}>
+            <label htmlFor="icon-upload" className={styles.uploadLabel}>
+              OR UPLOAD ICON
+            </label>
+            <div className={styles.fileInputRow}>
+              <input
+                ref={fileInputRef}
+                id="icon-upload"
+                type="file"
+                accept=".svg,.png,image/svg+xml,image/png"
+                className={styles.fileInputHidden}
+                onChange={handleIconUpload}
+              />
+              <button
+                type="button"
+                className={styles.chooseFile}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Select file
+              </button>
+              {uploadedFileName || state.uploadedIcon ? (
+                <div className={styles.fileStatus}>
+                  {uploadedFileName ? (
+                    <span className={styles.fileName} title={uploadedFileName}>
+                      {uploadedFileName}
+                    </span>
+                  ) : null}
+                  {state.uploadedIcon ? (
+                    <button
+                      type="button"
+                      className={styles.clearUpload}
+                      onClick={handleClearUpload}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            <div className={styles.hint}>Accepted formats: SVG, PNG</div>
+            {uploadError ? (
+              <div className={styles.error} role="alert">
+                {uploadError}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </div>

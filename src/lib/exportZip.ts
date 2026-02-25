@@ -23,7 +23,9 @@ export async function exportTagZip(config: TagConfig): Promise<void> {
   const fgHex = pickForeground(config.bgHex);
   const fileLabel =
     config.label.trim() ||
-    (config.mode === 'text' ? config.text.trim() : config.iconId.trim());
+    (config.mode === 'text'
+      ? config.text.trim()
+      : config.iconId.trim() || config.uploadedIcon?.id?.trim() || 'icon');
 
   let outlinedTextPath: OutlinedTextPath | null = null;
 

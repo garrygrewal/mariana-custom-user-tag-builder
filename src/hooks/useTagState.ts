@@ -1,5 +1,5 @@
 import { useReducer, useMemo } from 'react';
-import type { TagConfig, TagMode, ContrastWarning } from '../types';
+import type { TagConfig, TagMode, ContrastWarning, IconDef } from '../types';
 import {
   TEXT_MAX_LENGTH,
   CONTRAST_THRESHOLD_TEXT,
@@ -12,7 +12,8 @@ export type TagAction =
   | { type: 'SET_BG_HEX'; payload: string }
   | { type: 'SET_MODE'; payload: TagMode }
   | { type: 'SET_TEXT'; payload: string }
-  | { type: 'SET_ICON_ID'; payload: string };
+  | { type: 'SET_ICON_ID'; payload: string }
+  | { type: 'SET_UPLOADED_ICON'; payload: IconDef | null };
 
 const initialState: TagConfig = {
   label: '',
@@ -20,6 +21,7 @@ const initialState: TagConfig = {
   mode: 'text',
   text: '',
   iconId: '',
+  uploadedIcon: null,
 };
 
 function reducer(state: TagConfig, action: TagAction): TagConfig {
@@ -36,7 +38,9 @@ function reducer(state: TagConfig, action: TagAction): TagConfig {
       return { ...state, text: cleaned };
     }
     case 'SET_ICON_ID':
-      return { ...state, iconId: action.payload };
+      return { ...state, iconId: action.payload, uploadedIcon: null };
+    case 'SET_UPLOADED_ICON':
+      return { ...state, uploadedIcon: action.payload, iconId: '' };
     default:
       return state;
   }
@@ -54,21 +58,23 @@ export function useTagState() {
     if (fgBgContrast < CONTRAST_THRESHOLD_TEXT) {
       warnings.push({
         type: 'low-fg-contrast',
-        message: `Low text/icon contrast (${fgBgContrast.toFixed(1)}:1). Minimum recommended is ${CONTRAST_THRESHOLD_TEXT}:1.`,
+        message: `Low text/icon contrast (${fgBgContrast.toFixed(1)}:1). Minimum recommended is ${CONTRAST_THRESHOLD_TEXT}:1 contrast ratio.`,
         ratio: fgBgContrast,
       });
     }
     if (bgWhiteContrast < CONTRAST_THRESHOLD_BG_WHITE) {
       warnings.push({
         type: 'low-bg-visibility',
-        message: `Tag may be hard to see on white backgrounds (${bgWhiteContrast.toFixed(1)}:1). Minimum recommended is ${CONTRAST_THRESHOLD_BG_WHITE}:1.`,
+        message: `Tag may be hard to see on white backgrounds (${bgWhiteContrast.toFixed(1)}:1). Minimum recommended is ${CONTRAST_THRESHOLD_BG_WHITE}:1 contrast ratio.`,
         ratio: bgWhiteContrast,
       });
     }
 
     const fileLabel =
       state.label.trim() ||
-      (state.mode === 'text' ? state.text.trim() : state.iconId.trim());
+      (state.mode === 'text'
+        ? state.text.trim()
+        : state.iconId.trim() || state.uploadedIcon?.id?.trim() || 'icon');
 
     const zipName = buildFileName(
       fileLabel,
