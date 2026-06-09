@@ -1,6 +1,6 @@
 import { Resvg } from '@resvg/resvg-js';
-import { EXPORT_SIZE, FONT_FAMILY } from '../src/constants';
-import { loadFontTtf } from './fonts.node';
+import { EXPORT_SIZE, FONT_FAMILY } from '../src/constants.js';
+import { loadFontTtf } from './fonts.node.js';
 
 /**
  * Rasterize an SVG string to a 30x30 PNG Buffer using resvg (Node-native).

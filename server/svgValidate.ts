@@ -1,4 +1,4 @@
-import { contrastRatio } from '../src/lib/contrast';
+import { contrastRatio } from '../src/lib/contrast.js';
 import {
   CONTRAST_THRESHOLD_TEXT,
   CONTRAST_THRESHOLD_BG_WHITE,

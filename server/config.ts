@@ -1,4 +1,4 @@
-import type { FieldMap } from './ticket';
+import type { FieldMap } from './ticket.js';
 
 export interface JiraConfig {
   baseUrl: string;

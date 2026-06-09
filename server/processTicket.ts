@@ -1,7 +1,7 @@
-import { getJiraConfig, type JiraConfig } from './config';
-import { JiraClient, buildAdf, type AdfDoc, type JiraClientLike } from './jira';
-import { parseTicket, type TagRequest } from './ticket';
-import { generateTag, type GenerationResult } from './tagGenerator';
+import { getJiraConfig, type JiraConfig } from './config.js';
+import { JiraClient, buildAdf, type AdfDoc, type JiraClientLike } from './jira.js';
+import { parseTicket, type TagRequest } from './ticket.js';
+import { generateTag, type GenerationResult } from './tagGenerator.js';
 
 export interface ProcessResult {
   issueKey: string;

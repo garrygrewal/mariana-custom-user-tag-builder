@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getWebhookSecret } from '../server/config';
-import { extractIssueKey } from '../server/webhookPayload';
-import { processTicket } from '../server/processTicket';
+import { getWebhookSecret } from '../server/config.js';
+import { extractIssueKey } from '../server/webhookPayload.js';
+import { processTicket } from '../server/processTicket.js';
 
 /**
  * Webhook endpoint hit by the Jira Automation rule when a UTR ticket is

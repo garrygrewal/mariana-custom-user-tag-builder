@@ -1,5 +1,5 @@
-import type { JiraConfig } from './config';
-import type { JiraIssue } from './ticket';
+import type { JiraConfig } from './config.js';
+import type { JiraIssue } from './ticket.js';
 
 /** Atlassian Document Format document node. */
 export interface AdfDoc {

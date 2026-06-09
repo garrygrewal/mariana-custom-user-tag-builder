@@ -1,4 +1,4 @@
-import { extractColor } from './colors';
+import { extractColor } from './colors.js';
 
 /** Normalized representation of a custom user tag request from a Jira issue. */
 export interface TagRequest {

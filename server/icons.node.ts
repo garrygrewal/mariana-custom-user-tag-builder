@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { IconDef } from '../src/types';
-import { resolveProjectPath } from './paths';
+import type { IconDef } from '../src/types.js';
+import { resolveProjectPath } from './paths.js';
 
 /** Supports both single- and double-quoted viewBox attributes. */
 function parseViewBox(svg: string): string {

@@ -1,4 +1,4 @@
-import type { TagConfig, IconDef } from '../types';
+import type { TagConfig, IconDef } from '../types.js';
 import {
   EXPORT_SIZE,
   TAG_RADIUS,
@@ -12,8 +12,8 @@ import {
   ICON_FIT_MAX_WIDTH_RATIO,
   ICON_FIT_MAX_HEIGHT_RATIO,
   ICON_OPTICAL_OFFSET_PX,
-} from '../constants';
-import type { OutlinedTextPath } from './textToPath';
+} from '../constants.js';
+import type { OutlinedTextPath } from './textToPath.js';
 
 /**
  * Resolver for looking up a library icon by id. Injected by the environment so

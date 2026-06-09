@@ -1,6 +1,6 @@
-import type { IconDef } from '../src/types';
-import { TEXT_MAX_LENGTH } from '../src/constants';
-import type { TagRequest } from './ticket';
+import type { IconDef } from '../src/types.js';
+import { TEXT_MAX_LENGTH } from '../src/constants.js';
+import type { TagRequest } from './ticket.js';
 
 export interface Classification {
   /** When true, route to the LLM SVG author; otherwise to the builder. */

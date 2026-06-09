@@ -1,15 +1,15 @@
-import type { TagConfig } from '../src/types';
-import { TAG_RADIUS } from '../src/constants';
-import { buildTagSvg, fitFontSize } from '../src/lib/svgBuilder';
-import { buildOutlinedTextPath } from '../src/lib/textToPath';
-import { pickForeground } from '../src/lib/contrast';
-import { toSlug } from '../src/lib/slugify';
-import { classify, type Classification } from './classify';
-import { getIconById, loadIconRegistry } from './icons.node';
-import { loadFontTtf } from './fonts.node';
-import { svgToPng } from './rasterize.node';
-import { generateComplexSvgs } from './aiSvg';
-import type { TagRequest } from './ticket';
+import type { TagConfig } from '../src/types.js';
+import { TAG_RADIUS } from '../src/constants.js';
+import { buildTagSvg, fitFontSize } from '../src/lib/svgBuilder.js';
+import { buildOutlinedTextPath } from '../src/lib/textToPath.js';
+import { pickForeground } from '../src/lib/contrast.js';
+import { toSlug } from '../src/lib/slugify.js';
+import { classify, type Classification } from './classify.js';
+import { getIconById, loadIconRegistry } from './icons.node.js';
+import { loadFontTtf } from './fonts.node.js';
+import { svgToPng } from './rasterize.node.js';
+import { generateComplexSvgs } from './aiSvg.js';
+import type { TagRequest } from './ticket.js';
 
 export interface GeneratedArtifact {
   svg: string;

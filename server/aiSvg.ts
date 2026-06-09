@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { generateText } from 'ai';
-import { resolveProjectPath } from './paths';
-import { validateComplexSvg } from './svgValidate';
-import type { TagRequest } from './ticket';
+import { resolveProjectPath } from './paths.js';
+import { validateComplexSvg } from './svgValidate.js';
+import type { TagRequest } from './ticket.js';
 
 let guidelinesCache: string | null = null;
 

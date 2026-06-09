@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { resolveProjectPath } from './paths';
+import { resolveProjectPath } from './paths.js';
 
 export interface ServerFont {
   /** Absolute path to the .ttf on disk (for resvg `fontFiles`). */
