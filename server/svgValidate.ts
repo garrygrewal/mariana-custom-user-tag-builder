@@ -2,7 +2,7 @@ import { contrastRatio } from '../src/lib/contrast.js';
 import {
   CONTRAST_THRESHOLD_TEXT,
   CONTRAST_THRESHOLD_BG_WHITE,
-} from '../src/constants';
+} from '../src/constants.js';
 
 export interface SvgValidation {
   ok: boolean;
