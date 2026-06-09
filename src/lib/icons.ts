@@ -1,4 +1,5 @@
 import type { IconDef } from '../types';
+import { setIconResolver } from './svgBuilder';
 
 const svgModules = import.meta.glob<string>('../../icons/*.svg', {
   eager: true,
@@ -42,3 +43,7 @@ export const ICON_REGISTRY: IconDef[] = Object.entries(svgModules)
     };
   })
   .sort((a, b) => a.id.localeCompare(b.id));
+
+// Register the browser/Vite icon registry as the default resolver used by
+// buildTagSvg when callers don't pass an explicit icon.
+setIconResolver((iconId) => ICON_REGISTRY.find((i) => i.id === iconId) ?? null);

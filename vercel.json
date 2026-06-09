@@ -1,0 +1,9 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/jira-webhook.ts": {
+      "maxDuration": 60,
+      "includeFiles": "{icons/**,public/fonts/**,docs/**}"
+    }
+  }
+}

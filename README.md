@@ -76,6 +76,26 @@ at build time via Vite glob import. Requirements:
 
 
 
+## Automated generation (Jira webhook)
+
+In addition to the interactive builder, this repo ships a serverless endpoint
+that auto-generates tags from Jira UTR (User Tag Request) tickets:
+
+- `api/jira-webhook.ts` — Vercel function triggered by a Jira Automation rule on
+  ticket creation. It classifies the request, generates the tag (reusing the
+  builder logic for simple tags, or an AI-authored SVG for complex ones via the
+  Vercel AI SDK), rasterizes a PNG, attaches both files to the ticket, and posts
+  an internal draft comment for a designer to review.
+- `server/` — framework-agnostic generation core shared with the browser app
+  (`tagGenerator`, `classify`, `aiSvg`, `jira`, Node rasterizer/font/icon loaders).
+- `docs/user-tag-design-guidelines.md` — design rules used by both the
+  classifier and the AI authoring prompt.
+- `docs/jira-automation-setup.md` — how to configure the rule + env vars.
+
+Type-check the server code with `npm run typecheck:server`. See
+[`.env.example`](.env.example) for required configuration.
+
 ## Tech Stack
 
-React 19, TypeScript, Vite, CSS Modules, Vitest, Playwright.
+React 19, TypeScript, Vite, CSS Modules, Vitest, Playwright. Server: Vercel
+Functions, Vercel AI SDK, `@resvg/resvg-js`.

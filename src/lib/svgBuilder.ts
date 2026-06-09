@@ -13,8 +13,21 @@ import {
   ICON_FIT_MAX_HEIGHT_RATIO,
   ICON_OPTICAL_OFFSET_PX,
 } from '../constants';
-import { ICON_REGISTRY } from './icons';
 import type { OutlinedTextPath } from './textToPath';
+
+/**
+ * Resolver for looking up a library icon by id. Injected by the environment so
+ * this module stays free of browser-only deps (the browser registers the Vite
+ * glob registry; the server registers a filesystem registry).
+ */
+export type IconResolver = (iconId: string) => IconDef | null;
+
+let iconResolver: IconResolver | null = null;
+
+/** Register the icon lookup used by `buildTagSvg` when no icon is passed in. */
+export function setIconResolver(resolver: IconResolver | null): void {
+  iconResolver = resolver;
+}
 
 const PAINT_ATTR_RE = /\b(fill|stroke)\s*=\s*(["'])([^"']+)\2/gi;
 const PAINT_STYLE_RE = /\b(fill|stroke)\s*:\s*([^;]+)/gi;
@@ -174,9 +187,14 @@ function recolorIconPaint(raw: string, fgHex: string): string {
     );
 }
 
-function resolveIcon(config: TagConfig) {
+function resolveIcon(
+  config: TagConfig,
+  explicitIcon?: IconDef | null,
+): IconDef | null {
   if (config.uploadedIcon) return config.uploadedIcon;
-  return ICON_REGISTRY.find((i) => i.id === config.iconId) ?? null;
+  if (explicitIcon !== undefined) return explicitIcon;
+  if (iconResolver) return iconResolver(config.iconId);
+  return null;
 }
 
 interface IconBounds {
@@ -275,6 +293,12 @@ function computeIconScale(size: number, vbW: number, vbH: number): number {
 interface BuildOptions {
   config: TagConfig;
   fgHex: string;
+  /**
+   * Resolved library icon for icon mode. When provided (even as null), it is
+   * used directly and the injected resolver is bypassed. Lets callers (e.g. the
+   * server) avoid registering a global resolver.
+   */
+  icon?: IconDef | null;
   /** Base64-encoded font data for portable .svg export */
   fontBase64?: string;
   fontMime?: 'font/woff2' | 'font/truetype';
@@ -288,6 +312,7 @@ interface BuildOptions {
 export function buildTagSvg({
   config,
   fgHex,
+  icon: explicitIcon,
   fontBase64,
   fontMime = 'font/truetype',
   fontFormat = 'truetype',
@@ -325,7 +350,7 @@ export function buildTagSvg({
         fill="${fgHex}">${escapeXml(text)}</text>`;
     }
   } else {
-    const icon = resolveIcon(config);
+    const icon = resolveIcon(config, explicitIcon);
     if (icon) {
       const vbParts = icon.viewBox.split(/\s+/).map(Number);
       const [vbMinX = 0, vbMinY = 0, vbW = 0, vbH = 0] = vbParts;
