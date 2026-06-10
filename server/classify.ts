@@ -45,6 +45,20 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   chair: ['chair', 'seat', 'reformer'],
   location: ['location', 'place', 'pin', 'map'],
   running: ['running', 'runner', 'run', 'cardio'],
+  person: ['person', 'individual', 'profile'],
+  banned: ['banned', 'blocked', 'blacklist', 'ban', 'prohibited', 'denied'],
+  staff: ['staff', 'crew'],
+  employee: ['employee', 'worker', 'colleague', 'staffer'],
+  student: ['student', 'learner', 'pupil', 'academic'],
+  vaccinated: ['vaccinated', 'vaccine', 'vaccination', 'syringe', 'immunized'],
+  investor: ['investor', 'shareholder', 'backer'],
+  injury: ['injury', 'injured', 'hurt', 'rehab'],
+  sneaker: ['sneaker', 'trainers', 'footwear', 'kicks'],
+  'health-professional': ['healthcare', 'medical', 'doctor', 'nurse', 'clinician'],
+  corporate: ['corporate', 'company', 'business', 'office'],
+  wedding: ['wedding', 'marriage', 'bride', 'groom', 'newlywed'],
+  'frequent-customer': ['regular', 'loyal'],
+  livestream: ['livestream', 'streaming', 'broadcast'],
 };
 
 const LETTERS_INTENT = /\b(letters?|initials?|text|abbreviation|monogram|acronym)\b/i;
