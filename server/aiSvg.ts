@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { generateText } from 'ai';
 import { resolveProjectPath } from './paths.js';
 import { validateComplexSvg } from './svgValidate.js';
@@ -17,6 +17,29 @@ function loadGuidelines(): string {
     guidelinesCache = '';
   }
   return guidelinesCache;
+}
+
+let exemplarsCache: string | null = null;
+
+/**
+ * Load curated house-style example tags (full approved SVGs) to anchor the
+ * model's structure and visual quality. Drop/remove .svg files in
+ * docs/tag-exemplars to tune the set.
+ */
+function loadExemplars(): string {
+  if (exemplarsCache != null) return exemplarsCache;
+  try {
+    const dir = resolveProjectPath('docs/tag-exemplars');
+    const files = readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith('.svg'))
+      .sort();
+    exemplarsCache = files
+      .map((f, i) => `Example ${i + 1}:\n${readFileSync(`${dir}/${f}`, 'utf8').trim()}`)
+      .join('\n\n');
+  } catch {
+    exemplarsCache = '';
+  }
+  return exemplarsCache;
 }
 
 /** Default model routed through the Vercel AI Gateway; override via env. */
@@ -45,14 +68,27 @@ function stripToSvg(raw: string): string {
 
 function systemPrompt(): string {
   const guidelines = loadGuidelines();
-  return [
+  const exemplars = loadExemplars();
+  const parts = [
     'You are a senior icon designer producing a single Mariana Tek custom user tag as SVG.',
     'A user tag is a small circular badge shown at ~16-30px next to a customer name.',
     'Follow the design guidelines exactly. Output ONLY the raw <svg> element — no markdown, no comments, no prose.',
     '',
     '=== DESIGN GUIDELINES ===',
     guidelines,
-  ].join('\n');
+  ];
+  if (exemplars) {
+    parts.push(
+      '',
+      '=== HOUSE-STYLE EXAMPLES ===',
+      'These are approved tags. Match their structure and visual quality (solid',
+      'FontAwesome-style glyph, negative-space detail via background-colored',
+      'sub-paths). Do NOT copy their subjects or colors — use the requested ones.',
+      '',
+      exemplars,
+    );
+  }
+  return parts.join('\n');
 }
 
 function userPrompt(

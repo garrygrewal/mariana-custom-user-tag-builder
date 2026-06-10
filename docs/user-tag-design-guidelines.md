@@ -92,3 +92,25 @@ When authoring SVG for a complex tag, the output MUST:
 - **Do** keep the circle edge-to-edge and the glyph centered with breathing room.
 - **Don't** add drop shadows, gradients, outer rings, or text labels around the tag.
 - **Don't** use more than the two colors (one background + one foreground).
+
+## House style (from the approved tag library)
+
+Patterns observed across the production tag set (a curated sample is provided to
+the LLM as the **HOUSE-STYLE EXAMPLES** section of the prompt — match their look):
+
+- **Glyph weight:** bold and generous — the glyph typically occupies the central
+  ~55-70% of the circle. Favor solid, filled shapes over thin outlines.
+- **Style:** Font Awesome "solid"-style silhouettes — chunky, rounded, friendly,
+  minimal internal detail.
+- **Negative-space detail (preferred technique):** carve interior detail by
+  drawing sub-paths filled with the **background color** rather than adding
+  strokes or a third color. Example: a document's ruled lines, or a logo's
+  inner cuts, are `fill="{bgHex}"` paths layered over the white glyph. This keeps
+  the tag strictly two-color while allowing rich shapes.
+- **Single subject:** one clear metaphor per tag. No scenes, no multiple objects
+  competing, no backgrounds behind the glyph other than the circle.
+- **Numbers/letters as glyphs:** when a tag is a number (e.g. a shoe size or a
+  milestone), it is drawn as bold vector paths, not `<text>` — but those are
+  normally handled by the builder's text mode, not the LLM.
+- **Edge safety:** the glyph never touches the circle edge; keep clear margin all
+  around so it reads as a centered badge.
