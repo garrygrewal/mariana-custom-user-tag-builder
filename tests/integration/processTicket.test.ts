@@ -144,15 +144,15 @@ describe('processTicket', () => {
     const result = await processTicket('UTR-100', { config, client });
 
     expect(result.isComplex).toBe(true);
-    // count defaults to 1 -> 2 complex options.
-    expect(result.artifactCount).toBe(2);
-    expect(client.attachments).toHaveLength(4);
+    // count defaults to 1 -> 1 complex option (svg + png).
+    expect(result.artifactCount).toBe(1);
+    expect(client.attachments).toHaveLength(2);
 
     const text = commentText(client.comments[0]);
     expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
-    // Two complex options -> two PNG images embedded inline.
-    expect(mediaCount(client.comments[0])).toBe(2);
+    // One option -> one PNG image embedded inline.
+    expect(mediaCount(client.comments[0])).toBe(1);
   });
 
   it('posts a failure comment and rethrows when generation fails', async () => {

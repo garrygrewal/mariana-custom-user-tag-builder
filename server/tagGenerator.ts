@@ -98,8 +98,10 @@ export async function generateTag(
     };
   }
 
+  // One option per requested tag (cost-efficient); a designer reviews and
+  // refines. Requests for multiple tags get multiple distinct options.
   const optionCount =
-    options.optionCount ?? Math.min(Math.max(req.count, 2), 3);
+    options.optionCount ?? Math.min(Math.max(req.count, 1), 3);
   const ai = await generateComplexSvgs(req, bgHex, fgHex, {
     optionCount,
     model: options.model,
