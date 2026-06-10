@@ -1,7 +1,10 @@
 import { getJiraConfig, type JiraConfig } from './config.js';
-import { JiraClient, buildAdf, type AdfDoc, type JiraClientLike } from './jira.js';
-import { parseTicket, type TagRequest } from './ticket.js';
-import { generateTag, type GenerationResult } from './tagGenerator.js';
+import { buildAdf, JiraClient, type AdfDoc, type JiraClientLike } from './jira.js';
+import { parseTicket } from './ticket.js';
+import { generateTag } from './tagGenerator.js';
+
+const REVIEW_TEXT =
+  ' DESIGN REVIEW NEEDED - Do not upload until approved by design. Please wait for a designer to comment and approve these user tags.';
 
 export interface ProcessResult {
   issueKey: string;
@@ -16,35 +19,32 @@ export interface ProcessDeps {
   client?: JiraClientLike;
 }
 
-function buildDraftComment(req: TagRequest, result: GenerationResult): AdfDoc {
-  const { classification, bgHex, fgHex, artifacts, warnings, aiModel } = result;
-
-  const facts: string[] = [
-    `Routing: ${classification.isComplex ? 'custom (AI-authored SVG)' : `builder (${classification.mode})`} — ${classification.reason}`,
-    `Background: ${bgHex}${req.colorMatched ? '' : ' (inferred — please confirm the requested color)'}`,
-    `Foreground: ${fgHex}`,
-  ];
-  for (const a of artifacts) {
-    facts.push(
-      `${a.optionLabel ?? 'Tag'}: ${a.svgFileName} + ${a.pngFileName}`,
-    );
-  }
-  if (aiModel) facts.push(`Generated with: ${aiModel}`);
-
-  const blocks: Array<string | string[]> = [
-    'Automated user-tag draft for designer review. These were auto-generated and have NOT been sent to the requester or client.',
-    facts,
-  ];
-
-  if (warnings.length > 0) {
-    blocks.push(warnings.map((w) => `Warning: ${w}`));
+/**
+ * Build the design-review comment: a single line that @mentions the reviewer,
+ * followed by the generated tag image(s) embedded inline via media nodes.
+ */
+function buildReviewComment(config: JiraConfig, mediaIds: string[]): AdfDoc {
+  const paragraph: { type: 'paragraph'; content: unknown[] } = {
+    type: 'paragraph',
+    content: [],
+  };
+  if (config.reviewAccountId) {
+    paragraph.content.push({
+      type: 'mention',
+      attrs: { id: config.reviewAccountId, text: config.reviewMentionText ?? '@reviewer' },
+    });
+    paragraph.content.push({ type: 'text', text: REVIEW_TEXT });
+  } else {
+    paragraph.content.push({ type: 'text', text: REVIEW_TEXT.trimStart() });
   }
 
-  blocks.push(
-    'Next: review the attached SVG/PNG, adjust or pick an option if needed, then forward the approved tag to the client yourself using the usual client comment prefix.',
-  );
+  const media = mediaIds.map((id) => ({
+    type: 'mediaSingle',
+    attrs: { layout: 'center' },
+    content: [{ type: 'media', attrs: { type: 'file', id, collection: '' } }],
+  }));
 
-  return buildAdf(blocks);
+  return { type: 'doc', version: 1, content: [paragraph, ...media] };
 }
 
 function buildFailureComment(error: unknown): AdfDoc {
@@ -73,6 +73,7 @@ export async function processTicket(
     const result = await generateTag(req);
 
     const attachments: string[] = [];
+    const imageMediaIds: string[] = [];
     for (const artifact of result.artifacts) {
       await client.addAttachment(
         issueKey,
@@ -80,16 +81,17 @@ export async function processTicket(
         new TextEncoder().encode(artifact.svg),
         'image/svg+xml',
       );
-      await client.addAttachment(
+      const pngRef = await client.addAttachment(
         issueKey,
         artifact.pngFileName,
         artifact.png,
         'image/png',
       );
+      imageMediaIds.push(pngRef.mediaId);
       attachments.push(artifact.svgFileName, artifact.pngFileName);
     }
 
-    await client.addComment(issueKey, buildDraftComment(req, result));
+    await client.addComment(issueKey, buildReviewComment(config, imageMediaIds));
 
     if (config.transitionId) {
       await client.transition(issueKey, config.transitionId);

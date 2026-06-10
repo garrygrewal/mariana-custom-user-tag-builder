@@ -12,7 +12,7 @@ vi.mock('ai', () => ({
 
 import { processTicket } from '../../server/processTicket';
 import { adfToText, type JiraIssue } from '../../server/ticket';
-import type { AdfDoc, JiraClientLike } from '../../server/jira';
+import type { AdfDoc, AttachmentRef, JiraClientLike } from '../../server/jira';
 import type { JiraConfig } from '../../server/config';
 
 interface CapturedAttachment {
@@ -36,8 +36,9 @@ class FakeJiraClient implements JiraClientLike {
     fileName: string,
     data: Uint8Array,
     mime: string,
-  ): Promise<void> {
+  ): Promise<AttachmentRef> {
     this.attachments.push({ fileName, mime, size: data.byteLength });
+    return { id: String(this.attachments.length), filename: fileName, mediaId: `media-${this.attachments.length}` };
   }
   async addComment(_key: string, body: AdfDoc): Promise<void> {
     this.comments.push(body);
@@ -52,7 +53,21 @@ const config: JiraConfig = {
   email: 'bot@example.com',
   apiToken: 'token',
   fieldMap: {},
+  reviewAccountId: 'acct-123',
+  reviewMentionText: '@Reviewer',
 };
+
+/** Count embedded media (mediaSingle) nodes in a comment doc. */
+function mediaCount(doc: AdfDoc): number {
+  return doc.content.filter(
+    (n) => (n as { type?: string }).type === 'mediaSingle',
+  ).length;
+}
+
+/** True if the comment @mentions the given accountId. */
+function mentions(doc: AdfDoc, accountId: string): boolean {
+  return JSON.stringify(doc.content).includes(`"id":"${accountId}"`);
+}
 
 function issueWith(summary: string, description: string): JiraIssue {
   return {
@@ -92,8 +107,11 @@ describe('processTicket', () => {
 
     expect(client.comments).toHaveLength(1);
     const text = commentText(client.comments[0]);
-    expect(text).toMatch(/draft for designer review/i);
+    expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
+    expect(mentions(client.comments[0], 'acct-123')).toBe(true);
+    // One PNG image embedded inline.
+    expect(mediaCount(client.comments[0])).toBe(1);
   });
 
   it('handles a simple letters tag via the builder (text mode)', async () => {
@@ -110,8 +128,9 @@ describe('processTicket', () => {
     expect(client.attachments.every((a) => a.size > 0)).toBe(true);
 
     const text = commentText(client.comments[0]);
-    expect(text).toMatch(/builder \(text\)/i);
+    expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
+    expect(mediaCount(client.comments[0])).toBe(1);
   });
 
   it('handles a complex ticket via the AI path and produces options', async () => {
@@ -130,9 +149,10 @@ describe('processTicket', () => {
     expect(client.attachments).toHaveLength(4);
 
     const text = commentText(client.comments[0]);
-    expect(text).toMatch(/custom \(AI-authored SVG\)/i);
-    expect(text).toMatch(/Option 1/);
+    expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
+    // Two complex options -> two PNG images embedded inline.
+    expect(mediaCount(client.comments[0])).toBe(2);
   });
 
   it('posts a failure comment and rethrows when generation fails', async () => {

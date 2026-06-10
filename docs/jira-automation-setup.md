@@ -58,10 +58,12 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 
 - **Attachments:** `custom-tag_<slug>_<hex>.svg` and `.png` (one pair per
   option; complex requests may include `Option 1..N`).
-- **Comment:** an internal draft summary (routing decision, colors, file names,
-  any contrast warnings). It deliberately omits the client-facing comment prefix
-  so nothing is sent to the client automatically — a designer reviews and
-  forwards the approved tag.
+- **Comment:** a design-review comment that @mentions the configured reviewer
+  (`JIRA_REVIEW_ACCOUNT_ID`) and embeds the generated tag image(s) inline. The
+  only text is: "DESIGN REVIEW NEEDED - Do not upload until approved by design.
+  Please wait for a designer to comment and approve these user tags." It
+  deliberately omits the client-facing comment prefix so nothing is sent to the
+  client automatically.
 - **On failure:** a comment explaining the error so a designer can take over.
 
 ## 5. Field mapping notes

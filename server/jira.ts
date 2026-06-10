@@ -8,6 +8,15 @@ export interface AdfDoc {
   content: unknown[];
 }
 
+/** Reference to an uploaded attachment, including its media-services id. */
+export interface AttachmentRef {
+  /** Numeric Jira attachment id. */
+  id: string;
+  filename: string;
+  /** Media-services file UUID, used to embed the file inline in ADF. */
+  mediaId: string;
+}
+
 /** Public surface of the Jira client, so callers/tests can inject a fake. */
 export interface JiraClientLike {
   getIssue(key: string): Promise<JiraIssue>;
@@ -16,7 +25,7 @@ export interface JiraClientLike {
     fileName: string,
     data: Uint8Array,
     mime: string,
-  ): Promise<void>;
+  ): Promise<AttachmentRef>;
   addComment(key: string, body: AdfDoc): Promise<void>;
   transition(key: string, transitionId: string): Promise<void>;
 }
@@ -69,26 +78,49 @@ export class JiraClient implements JiraClientLike {
 
   /**
    * Upload a file attachment to an issue.
-   * Requires the `X-Atlassian-Token: no-check` header.
+   * Requires the `X-Atlassian-Token: no-check` header. Returns the attachment
+   * id plus the media-services UUID needed to embed the file inline in ADF.
    */
   async addAttachment(
     key: string,
     fileName: string,
     data: Uint8Array,
     mime: string,
-  ): Promise<void> {
+  ): Promise<AttachmentRef> {
     const form = new FormData();
     // Copy into a fresh ArrayBuffer so Blob gets a clean backing store.
     const bytes = new Uint8Array(data.byteLength);
     bytes.set(data);
     form.append('file', new Blob([bytes], { type: mime }), fileName);
 
-    await this.request(`/rest/api/3/issue/${key}/attachments`, {
+    const resp = await this.request(`/rest/api/3/issue/${key}/attachments`, {
       method: 'POST',
       body: form,
       rawBody: true,
       headers: { 'X-Atlassian-Token': 'no-check' },
     });
+    const created = (await resp.json()) as Array<{ id?: string }>;
+    const id = created[0]?.id;
+    if (!id) throw new Error(`Attachment upload for ${fileName} returned no id`);
+    const mediaId = await this.resolveMediaId(id);
+    return { id, filename: fileName, mediaId };
+  }
+
+  /**
+   * Resolve an attachment's media-services file UUID by following the
+   * `content` redirect to `api.media.atlassian.com/file/<uuid>/...`.
+   */
+  private async resolveMediaId(attachmentId: string): Promise<string> {
+    const resp = await fetch(
+      this.url(`/rest/api/3/attachment/content/${attachmentId}`),
+      { method: 'GET', headers: { Authorization: this.authHeader() }, redirect: 'manual' },
+    );
+    const location = resp.headers.get('location') ?? '';
+    const match = location.match(/\/file\/([0-9a-fA-F-]{36})/);
+    if (!match) {
+      throw new Error(`Could not resolve media id for attachment ${attachmentId}`);
+    }
+    return match[1];
   }
 
   /** Add a comment (ADF). Optionally restrict visibility to a project role. */
