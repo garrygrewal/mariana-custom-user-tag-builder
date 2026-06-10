@@ -59,7 +59,8 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 - **Attachments:** `custom-tag_<slug>_<hex>.svg` and `.png` (one pair per
   option; complex requests may include `Option 1..N`).
 - **Comment:** a design-review comment that @mentions the configured reviewer
-  (`JIRA_REVIEW_ACCOUNT_ID`) and embeds the generated tag image(s) inline. The
+  (`JIRA_REVIEW_ACCOUNT_ID`) and embeds the generated tag SVG(s) inline at a
+  reduced size (vector, so they stay crisp). The
   only text is: "DESIGN REVIEW NEEDED - Do not upload until approved by design.
   Please wait for a designer to comment and approve these user tags." It
   deliberately omits the client-facing comment prefix so nothing is sent to the

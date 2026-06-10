@@ -6,6 +6,9 @@ import { generateTag } from './tagGenerator.js';
 const REVIEW_TEXT =
   ' DESIGN REVIEW NEEDED - Do not upload until approved by design. Please wait for a designer to comment and approve these user tags.';
 
+/** Inline display size (px) for embedded tag previews in the review comment. */
+const PREVIEW_PX = 96;
+
 export interface ProcessResult {
   issueKey: string;
   isComplex: boolean;
@@ -38,10 +41,17 @@ function buildReviewComment(config: JiraConfig, mediaIds: string[]): AdfDoc {
     paragraph.content.push({ type: 'text', text: REVIEW_TEXT.trimStart() });
   }
 
+  // Embed each preview as a vector SVG sized down so it stays crisp (no
+  // upscaling/pixelation) and isn't oversized in the comment stream.
   const media = mediaIds.map((id) => ({
     type: 'mediaSingle',
-    attrs: { layout: 'center' },
-    content: [{ type: 'media', attrs: { type: 'file', id, collection: '' } }],
+    attrs: { layout: 'center', width: PREVIEW_PX, widthType: 'pixel' },
+    content: [
+      {
+        type: 'media',
+        attrs: { type: 'file', id, collection: '', width: PREVIEW_PX, height: PREVIEW_PX },
+      },
+    ],
   }));
 
   return { type: 'doc', version: 1, content: [paragraph, ...media] };
@@ -73,25 +83,27 @@ export async function processTicket(
     const result = await generateTag(req);
 
     const attachments: string[] = [];
-    const imageMediaIds: string[] = [];
+    const previewMediaIds: string[] = [];
     for (const artifact of result.artifacts) {
-      await client.addAttachment(
+      // Embed the SVG inline (vector — stays crisp at small sizes); keep the
+      // PNG as a ticket attachment for quick download/preview.
+      const svgRef = await client.addAttachment(
         issueKey,
         artifact.svgFileName,
         new TextEncoder().encode(artifact.svg),
         'image/svg+xml',
       );
-      const pngRef = await client.addAttachment(
+      await client.addAttachment(
         issueKey,
         artifact.pngFileName,
         artifact.png,
         'image/png',
       );
-      imageMediaIds.push(pngRef.mediaId);
+      previewMediaIds.push(svgRef.mediaId);
       attachments.push(artifact.svgFileName, artifact.pngFileName);
     }
 
-    await client.addComment(issueKey, buildReviewComment(config, imageMediaIds));
+    await client.addComment(issueKey, buildReviewComment(config, previewMediaIds));
 
     if (config.transitionId) {
       await client.transition(issueKey, config.transitionId);
