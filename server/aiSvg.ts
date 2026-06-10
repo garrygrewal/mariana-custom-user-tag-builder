@@ -140,7 +140,10 @@ export async function generateComplexSvgs(
   options: AiSvgOptions = {},
 ): Promise<AiSvgResult> {
   const optionCount = Math.min(Math.max(options.optionCount ?? 1, 1), 3);
-  const maxAttempts = Math.max(options.maxAttempts ?? 2, 1);
+  // Default to a single attempt per option: options run in parallel, so each
+  // extra attempt adds a sequential LLM call to the wall-time and risks the
+  // function timeout. Two parallel options already give redundancy.
+  const maxAttempts = Math.max(options.maxAttempts ?? 1, 1);
   const model = options.model ?? process.env.TAG_AI_MODEL ?? DEFAULT_TAG_AI_MODEL;
 
   // Generate the options concurrently so total latency stays within the
