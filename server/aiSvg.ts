@@ -59,7 +59,7 @@ function userPrompt(
   req: TagRequest,
   bgHex: string,
   fgHex: string,
-  previous: string[],
+  variant: { index: number; total: number } | null,
   validationFeedback: string | null,
 ): string {
   const lines = [
@@ -73,11 +73,12 @@ function userPrompt(
     `(<circle cx="15" cy="15" r="15" fill="${bgHex}" />) and a single centered,`,
     `monochrome ${fgHex} glyph that represents the brief, fit within 80% width / 72% height.`,
   ];
-  if (previous.length > 0) {
+  if (variant && variant.total > 1) {
     lines.push(
       '',
-      'Provide a DISTINCT interpretation that differs visually from these prior options:',
-      ...previous.map((p, i) => `Option ${i + 1}: ${p}`),
+      `This is design variation ${variant.index + 1} of ${variant.total}. Make it a` +
+        ' visually distinct interpretation (different metaphor, composition, or framing)' +
+        ' from the other variations.',
     );
   }
   if (validationFeedback) {
@@ -106,30 +107,34 @@ export async function generateComplexSvgs(
   const maxAttempts = Math.max(options.maxAttempts ?? 2, 1);
   const model = options.model ?? process.env.TAG_AI_MODEL ?? DEFAULT_TAG_AI_MODEL;
 
-  const accepted: string[] = [];
-  const warnings: string[] = [];
-
-  for (let option = 0; option < optionCount; option++) {
-    let feedback: string | null = null;
-    let produced = false;
-
-    for (let attempt = 0; attempt < maxAttempts && !produced; attempt++) {
-      const { text } = await generateText({
-        model,
-        system: systemPrompt(),
-        prompt: userPrompt(req, bgHex, fgHex, accepted, feedback),
-        maxRetries: 2,
-      });
-
-      const svg = stripToSvg(text);
-      const validation = validateComplexSvg(svg, bgHex, fgHex);
-      if (validation.ok) {
-        accepted.push(svg);
-        warnings.push(...validation.warnings);
-        produced = true;
-      } else {
+  // Generate the options concurrently so total latency stays within the
+  // function timeout. Each option retries its own validation independently;
+  // distinctness is seeded via a variation hint rather than prior outputs.
+  const tasks = Array.from({ length: optionCount }, (_, index) =>
+    (async (): Promise<{ svg: string; warnings: string[] } | null> => {
+      let feedback: string | null = null;
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const { text } = await generateText({
+          model,
+          system: systemPrompt(),
+          prompt: userPrompt(req, bgHex, fgHex, { index, total: optionCount }, feedback),
+          maxRetries: 1,
+        });
+        const svg = stripToSvg(text);
+        const validation = validateComplexSvg(svg, bgHex, fgHex);
+        if (validation.ok) return { svg, warnings: validation.warnings };
         feedback = validation.errors.map((e) => `- ${e}`).join('\n');
       }
+      return null;
+    })(),
+  );
+
+  const accepted: string[] = [];
+  const warnings: string[] = [];
+  for (const result of await Promise.all(tasks)) {
+    if (result) {
+      accepted.push(result.svg);
+      warnings.push(...result.warnings);
     }
   }
 
