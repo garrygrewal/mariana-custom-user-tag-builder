@@ -16,8 +16,6 @@ export interface GeneratedArtifact {
   png: Buffer;
   svgFileName: string;
   pngFileName: string;
-  /** Set for multi-option complex requests (e.g. "Option 1"). */
-  optionLabel?: string;
 }
 
 export interface GenerationResult {
@@ -107,15 +105,14 @@ export async function generateTag(
     model: options.model,
   });
 
+  const multi = ai.svgs.length > 1;
   const artifacts: GeneratedArtifact[] = ai.svgs.map((svg, i) => {
-    const multi = ai.svgs.length > 1;
     const names = fileNames(slug, bgHex, multi ? i : undefined);
     return {
       svg,
       png: svgToPng(svg),
       svgFileName: names.svgFileName,
       pngFileName: names.pngFileName,
-      optionLabel: multi ? `Option ${i + 1}` : undefined,
     };
   });
 

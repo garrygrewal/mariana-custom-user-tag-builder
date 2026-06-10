@@ -42,15 +42,19 @@ function loadExemplars(): string {
   return exemplarsCache;
 }
 
-/** Default model routed through the Vercel AI Gateway; override via env. */
-export const DEFAULT_TAG_AI_MODEL = 'openai/gpt-5.4';
+/**
+ * Fallback model when `TAG_AI_MODEL` is unset. Defaults to a fast model that
+ * is available on the AI Gateway free tier so a fresh checkout works without
+ * credits. Production sets `TAG_AI_MODEL` (e.g. anthropic/claude-sonnet-4.5).
+ */
+export const DEFAULT_TAG_AI_MODEL = 'anthropic/claude-3.5-haiku';
 
 export interface AiSvgOptions {
   /** How many distinct options to attempt (1-3). */
   optionCount?: number;
   /** Validation retries per option. */
   maxAttempts?: number;
-  /** Gateway model id (e.g. "openai/gpt-5.4"). */
+  /** Gateway model id (e.g. "anthropic/claude-sonnet-4.5"). */
   model?: string;
 }
 

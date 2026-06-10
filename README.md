@@ -1,101 +1,141 @@
 # Custom User Tag Creator
 
-A standalone browser-based tool for creating small circular user tags with
-custom text or icons, previewing them live, and exporting as SVG + PNG in a
-single ZIP download.
+Tools for producing Mariana Tek **custom user tags** — small (30×30) circular
+badges shown next to a customer's name. The repo has two parts that share the
+same rendering core:
 
-## Quick Start
+1. **Interactive builder** — a browser app for designing a tag with custom text
+   or an icon, previewing it live, and exporting SVG + PNG as a ZIP.
+2. **Automated Jira pipeline** — a Vercel serverless function that turns a UTR
+   (User Tag Request) ticket into ready-to-review tag art automatically.
+
+## Quick start
 
 ```bash
 nvm use          # uses .nvmrc → Node 20.20.0
 npm install
-npm run dev      # http://localhost:5173
+npm run dev      # interactive builder at http://localhost:5173
 ```
 
 ## Scripts
 
-| Command             | Description                            |
-|---------------------|----------------------------------------|
-| `npm run dev`       | Start Vite dev server                  |
-| `npm run build`     | Type-check + production build to dist/ |
-| `npm run preview`   | Serve production build locally         |
-| `npm run lint`      | Run ESLint                             |
-| `npm run format`    | Format with Prettier                   |
-| `npm run test`      | Run unit + integration tests (Vitest)  |
-| `npm run test:e2e`  | Run Playwright E2E tests               |
-| `npm run test:all`  | Run unit tests then E2E tests          |
+| Command                    | Description                                  |
+| -------------------------- | -------------------------------------------- |
+| `npm run dev`              | Start the Vite dev server (builder app)      |
+| `npm run build`            | Type-check + production build to `dist/`     |
+| `npm run preview`          | Serve the production build locally           |
+| `npm run lint`             | Run ESLint                                   |
+| `npm run format`           | Format with Prettier                         |
+| `npm run typecheck:server` | Type-check the server/API generation code    |
+| `npm run test`             | Run unit + integration tests (Vitest)        |
+| `npm run test:e2e`         | Run Playwright E2E tests                     |
+| `npm run test:all`         | Run unit tests then E2E tests                |
 
-For E2E tests, install all configured Playwright browsers first:
+E2E tests need the Playwright browsers and a production build (the Playwright
+config runs `npm run preview` as its web server):
 
 ```bash
 npx playwright install chromium firefox webkit
 ```
 
-E2E tests require a production build (`npm run build`) — the Playwright
-config automatically runs `npm run preview` as its web server and executes the
-suite against Chromium, Firefox, and WebKit.
+## How a tag is generated
 
-## Project Structure
+Both the builder and the automation produce the same kind of artwork. A request
+is routed one of three ways (see `server/classify.ts`):
 
-```
-src/
-  components/     UI components (TagForm, IconPicker, HexColorInput, etc.)
-  hooks/          useTagState — form reducer + derived contrast/warnings
-  lib/            Pure logic — contrast, slugify, svgBuilder, rasterize, export
-  constants.ts    Tag dimensions, font config, contrast thresholds
-  types.ts        Shared TypeScript interfaces
-icons/            Source SVGs (auto-discovered at build time)
-public/fonts/     Proxima Nova ExtraBold font assets for in-app rendering
-tests/
-  unit/           Vitest unit tests
-  integration/    Vitest component integration tests
-  e2e/            Playwright browser tests
-```
+1. **Text mode** — content is letters/digits only (≤ 3 chars, e.g. `VIP`, a shoe
+   size, a milestone number). Rendered by the builder; text is converted to
+   vector outlines so it's font-independent.
+2. **Icon mode** — the request matches a glyph in the `icons/` library by id,
+   label, or a curated synonym (e.g. "vaccine" → `vaccinated`). Rendered
+   deterministically by the builder: a background circle + the recolored glyph.
+3. **Complex (AI) mode** — novel artwork with no library match. An LLM authors a
+   compliant SVG via the Vercel AI Gateway, validated against the design rules.
 
-## Export Details
+Every tag is a background circle (`<circle r="15">`) plus a single monochrome
+foreground glyph; the foreground color is chosen automatically for contrast.
 
-- **SVG**: 30×30 viewBox. Text exports are converted to vector paths for
-  consistent rendering across tools (including Figma) without font embedding.
-- **PNG**: 30×30 rasterized via Canvas from the same SVG markup.
-- **ZIP**: Contains both files. Filename format:
-  `custom-tag_<slug>_<text|icon>_<bgHex>.zip`
+## Icon library (`icons/`)
 
-`<slug>` is derived from:
-- text mode: the entered tag text (e.g. `AB` -> `ab`)
-- icon mode: the selected icon id (e.g. `dumbbell`)
+`icons/*.svg` are auto-discovered (Vite glob in the browser, `fs` on the server)
+into the same registry. Library matches render instantly, for free, and exactly
+on-brand, so the library is the preferred path over the AI.
 
-## Adding Icons
+To add an icon, drop a `.svg` into `icons/`:
 
-Drop any `.svg` file into the `icons/` directory. It will be auto-discovered
-at build time via Vite glob import. Requirements:
+- Include a `viewBox` (tight to the glyph for correct sizing).
+- Use a **single** color (any color, or `white`) — it is recolored to the
+  computed foreground at render time. Do **not** rely on background-colored
+  sub-paths for negative space (use path holes / `fill-rule` instead).
+- The id is derived from the filename (`my-icon.svg` → `my-icon`); add request
+  synonyms in `server/classify.ts` (`ICON_SYNONYMS`).
 
-- Must have a `viewBox` attribute (single or double quotes).
-- Monochrome fills (`white`, `#fff`, `#ffffff`) are replaced with the
-  computed foreground color at render time.
-- Icon ID is derived from the filename (e.g. `my-icon.svg` → id `my-icon`).
+### Reference corpus & extraction tool
 
-
+`reference-tags/` holds the approved production tag SVGs (the design
+source-of-truth). `scripts/extract-glyphs.mjs` pulls recolorable glyphs out of
+them into the library: it strips the background circle, verifies the glyph is a
+single recolorable color, and computes a tight integer `viewBox` by
+rasterizing. A curated subset lives in `docs/tag-exemplars/` and is injected
+into the AI prompt as house-style examples.
 
 ## Automated generation (Jira webhook)
 
-In addition to the interactive builder, this repo ships a serverless endpoint
-that auto-generates tags from Jira UTR (User Tag Request) tickets:
+`api/jira-webhook.ts` is a Vercel function triggered by a Jira Automation rule
+when a UTR ticket is created. For each ticket it:
 
-- `api/jira-webhook.ts` — Vercel function triggered by a Jira Automation rule on
-  ticket creation. It classifies the request, generates the tag (reusing the
-  builder logic for simple tags, or an AI-authored SVG for complex ones via the
-  Vercel AI SDK), rasterizes a PNG, attaches both files to the ticket, and posts
-  an internal draft comment for a designer to review.
-- `server/` — framework-agnostic generation core shared with the browser app
-  (`tagGenerator`, `classify`, `aiSvg`, `jira`, Node rasterizer/font/icon loaders).
-- `docs/user-tag-design-guidelines.md` — design rules used by both the
-  classifier and the AI authoring prompt.
-- `docs/jira-automation-setup.md` — how to configure the rule + env vars.
+1. Reads the issue and parses the request — Tag Name, Tag Color, Total # of
+   Tags, and a Tag Icon hint from the form's custom fields (configurable via
+   `JIRA_FIELD_*`), falling back to the summary/description text.
+2. Classifies and generates the tag(s) (builder or AI, per above) and
+   rasterizes each SVG to PNG with `@resvg/resvg-js`.
+3. Attaches the SVG + PNG to the ticket and posts an internal **design-review
+   comment** that @mentions the reviewer and embeds the tag preview inline. It
+   never contains the client-facing prefix, so nothing is sent to a client
+   automatically — a designer reviews and forwards the approved tag.
 
-Type-check the server code with `npm run typecheck:server`. See
-[`.env.example`](.env.example) for required configuration.
+Notes:
 
-## Tech Stack
+- The chosen `TAG_AI_MODEL` must finish within the function timeout (**60s on
+  the Vercel Hobby plan**). `anthropic/claude-sonnet-4.5` is the recommended
+  model; heavy reasoning models (gpt-5.x, gemini-2.5-pro) are too slow.
+- Complex requests produce **one** option per requested tag (cost-efficient);
+  multi-tag requests get multiple distinct options.
+
+Setup: see [`docs/jira-automation-setup.md`](docs/jira-automation-setup.md) for
+the Automation rule and [`.env.example`](.env.example) for configuration. The
+design rules shared by the classifier and the AI prompt are in
+[`docs/user-tag-design-guidelines.md`](docs/user-tag-design-guidelines.md).
+
+## Project structure
+
+```
+src/                  Interactive builder (React)
+  components/         UI (TagForm, IconPicker, HexColorInput, TagPreview, …)
+  hooks/              useTagState — form reducer + derived contrast/warnings
+  lib/                Pure logic — svgBuilder, textToPath, contrast, slugify, …
+  constants.ts        Tag dimensions, font config, contrast thresholds
+  types.ts            Shared TypeScript interfaces
+server/               Generation core (framework-agnostic, Node)
+  classify, tagGenerator, aiSvg, svgValidate, ticket, colors, jira,
+  config, processTicket, *.node loaders (icons/fonts/rasterize), paths
+api/jira-webhook.ts   Vercel function entry point
+icons/                Library glyphs (auto-discovered)
+reference-tags/       Approved tag corpus (source for the library)
+scripts/              extract-glyphs.mjs — glyph extraction tool
+docs/                 Design guidelines, Jira setup, AI tag exemplars
+public/fonts/         Proxima Nova ExtraBold for in-app text rendering
+tests/                Vitest unit + integration, Playwright e2e
+```
+
+## Builder export details
+
+- **SVG**: 30×30 viewBox. Text is converted to vector paths for consistent
+  rendering across tools (including Figma) without font embedding.
+- **PNG**: 30×30 rasterized from the same SVG markup.
+- **ZIP**: contains both files, named `custom-tag_<slug>_<bgHex>.zip`.
+
+## Tech stack
 
 React 19, TypeScript, Vite, CSS Modules, Vitest, Playwright. Server: Vercel
-Functions, Vercel AI SDK, `@resvg/resvg-js`.
+Functions, Vercel AI SDK (AI Gateway), `@resvg/resvg-js`.
