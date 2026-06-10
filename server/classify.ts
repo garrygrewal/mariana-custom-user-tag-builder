@@ -33,7 +33,7 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   ring: ['ring', 'jewelry', 'wedding'],
   child: ['child', 'kid', 'baby', 'children', 'youth'],
   home: ['home', 'house'],
-  note: ['note', 'notes', 'memo'],
+  note: ['note', 'notes', 'memo', 'document', 'paperwork', 'waiver', 'consent', 'covid'],
   priority: ['priority', 'important', 'urgent', 'flag'],
   senior: ['senior', 'elder', 'older', 'retired'],
   instructor: ['instructor', 'coach', 'trainer'],
@@ -64,6 +64,7 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   birthday: ['birthday', 'bday', 'cake', 'celebration'],
   alert: ['alert', 'warning', 'exclamation', 'caution'],
   dollar: ['dollar', 'payment', 'money'],
+  'friends-family': ['friends', 'family', 'household'],
 };
 
 const LETTERS_INTENT = /\b(letters?|initials?|text|abbreviation|monogram|acronym)\b/i;
