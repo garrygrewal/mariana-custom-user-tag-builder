@@ -59,6 +59,11 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   wedding: ['wedding', 'marriage', 'bride', 'groom', 'newlywed'],
   'frequent-customer': ['regular', 'loyal'],
   livestream: ['livestream', 'streaming', 'broadcast'],
+  'emergency-services': ['emergency', 'ambulance', 'paramedic', 'ems'],
+  hands: ['hands', 'helping', 'gratitude', 'namaste'],
+  birthday: ['birthday', 'bday', 'cake', 'celebration'],
+  alert: ['alert', 'warning', 'exclamation', 'caution'],
+  dollar: ['dollar', 'payment', 'money'],
 };
 
 const LETTERS_INTENT = /\b(letters?|initials?|text|abbreviation|monogram|acronym)\b/i;

@@ -13,50 +13,55 @@ const SRC = resolve(ROOT, 'reference-tags');
 const OUT = resolve(ROOT, 'icons');
 const SCALE = 10; // 30u -> 300px
 
-// src filename (no .svg) -> { id, synonyms }
+// src filename (no .svg) -> { id, synonyms }. Already-extracted glyphs are
+// intentionally omitted so re-running this round does not touch them.
 const CANDIDATES = [
-  ['Person', 'person', ['person', 'individual', 'profile', 'user']],
-  ['Banned', 'banned', ['banned', 'blocked', 'blacklist', 'ban', 'prohibited', 'denied']],
-  ['Staff', 'staff', ['staff', 'team member', 'crew']],
-  ['Employee', 'employee', ['employee', 'worker', 'colleague']],
-  ['Student', 'student', ['student', 'learner', 'pupil', 'academic']],
-  ['Vaccinated', 'vaccinated', ['vaccinated', 'vaccine', 'vaccination', 'syringe', 'shot', 'immunized']],
-  ['Pregnancy', 'pregnancy', ['pregnancy', 'pregnant', 'prenatal', 'expecting', 'maternity']],
-  ['Investor', 'investor', ['investor', 'shareholder', 'backer']],
-  ['Injury', 'injury', ['injury', 'injured', 'hurt', 'rehab']],
-  ['NoPhoto', 'no-photo', ['no photo', 'no-photo', 'camera off', 'photo banned']],
-  ['MissingDocuments', 'missing-documents', ['missing documents', 'missing docs', 'paperwork', 'incomplete']],
-  ['EmergencyServices', 'emergency-services', ['emergency', 'ambulance', 'emergency services', 'paramedic']],
-  ['Military', 'military', ['military', 'veteran', 'armed forces', 'army', 'service member']],
-  ['Sneaker', 'sneaker', ['sneaker', 'trainers', 'footwear', 'kicks']],
-  ['HealthProfessional', 'health-professional', ['healthcare', 'medical', 'doctor', 'nurse', 'health professional', 'clinician']],
-  ['Corporate', 'corporate', ['corporate', 'company', 'business', 'b2b', 'office']],
-  ['Wedding', 'wedding', ['wedding', 'marriage', 'bride', 'groom', 'newlywed']],
-  ['FoundingMember', 'founding-member', ['founding member', 'founder', 'charter member']],
-  ['FrequentCustomer', 'frequent-customer', ['frequent customer', 'regular', 'loyal', 'frequent shopper']],
-  ['Hands', 'hands', ['hands', 'support', 'care', 'helping hands']],
-  ['Livestream', 'livestream', ['livestream', 'streaming', 'live', 'broadcast']],
+  ['EmergencyServices', 'emergency-services', ['emergency', 'ambulance', 'paramedic', 'ems']],
+  ['Hands', 'hands', ['hands', 'helping', 'gratitude', 'namaste']],
+  ['BirthdayReservation', 'birthday', ['birthday', 'bday', 'cake', 'celebration']],
+  ['CCIssue', 'alert', ['alert', 'warning', 'exclamation', 'caution']],
+  ['Add-OnReservation', 'dollar', ['dollar', 'payment', 'money']],
+  // Reviewed-out: Military (negative-space/two-color), EnergyExchange ("EE"
+  // text), CommunityPartnership (duplicate of existing handshake).
 ];
 
-const WHITE = new Set(['#fff', '#ffffff', 'white', 'none', 'currentcolor', '']);
-
-function getBgCircleFill(svg) {
-  const m = svg.match(/<circle\b[^>]*\br=["']15["'][^>]*>/i);
-  if (!m) return { fill: null, circle: null };
-  const fill = m[0].match(/fill=["']([^"']+)["']/i);
-  return { fill: fill ? fill[1].toLowerCase() : null, circle: m[0] };
-}
+const PRESERVE = new Set(['', 'none', 'inherit', 'currentcolor', 'context-fill', 'context-stroke']);
+const isPreserved = (v) => {
+  const t = v.trim().toLowerCase();
+  return PRESERVE.has(t) || t.startsWith('url(') || t.startsWith('var(');
+};
 
 function innerOf(svg) {
   const m = svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/i);
   return m ? m[1] : svg;
 }
 
-function fills(s) {
-  const out = [];
-  for (const m of s.matchAll(/(?:fill|stroke)=["']([^"']+)["']/gi)) out.push(m[1].toLowerCase());
-  for (const m of s.matchAll(/(?:fill|stroke)\s*:\s*([^;"']+)/gi)) out.push(m[1].trim().toLowerCase());
-  return out;
+/** Strip the first drawable element (the background circle or circle-path). */
+function stripBackground(inner) {
+  const m = inner.match(/<(circle|rect|ellipse|path)\b[^>]*?(?:\/>|>[\s\S]*?<\/\1>)/i);
+  if (!m) return { glyph: inner.trim(), bg: null };
+  const el = m[0];
+  const fill = el.match(/fill=["']([^"']+)["']/i);
+  const stroke = el.match(/stroke=["']([^"']+)["']/i);
+  const bg =
+    fill && fill[1].toLowerCase() !== 'none'
+      ? fill[1].toLowerCase()
+      : stroke
+        ? stroke[1].toLowerCase()
+        : null;
+  return { glyph: inner.replace(el, '').trim(), bg };
+}
+
+/** Distinct, non-inherited paint colors used by the glyph. */
+function glyphColors(s) {
+  const set = new Set();
+  for (const m of s.matchAll(/(?:fill|stroke)=["']([^"']+)["']/gi)) {
+    if (!isPreserved(m[1])) set.add(m[1].toLowerCase());
+  }
+  for (const m of s.matchAll(/(?:fill|stroke)\s*:\s*([^;"']+)/gi)) {
+    if (!isPreserved(m[1])) set.add(m[1].trim().toLowerCase());
+  }
+  return set;
 }
 
 function bbox(glyphInner) {
@@ -93,15 +98,14 @@ for (const [src, id, synonyms] of CANDIDATES) {
     continue;
   }
   const svg = readFileSync(file, 'utf8');
-  const { fill: bg, circle } = getBgCircleFill(svg);
-  if (!circle) {
-    skipped.push(`${src} (no bg circle)`);
+  const { glyph, bg } = stripBackground(innerOf(svg));
+  if (!glyph) {
+    skipped.push(`${src} (empty after background strip)`);
     continue;
   }
-  const glyph = innerOf(svg).replace(circle, '').trim();
-  const bad = fills(glyph).filter((f) => !WHITE.has(f));
-  if (bad.length) {
-    skipped.push(`${src} (non-recolorable fills: ${[...new Set(bad)].join(', ')})`);
+  const colors = glyphColors(glyph);
+  if (colors.size !== 1 || (bg && colors.has(bg))) {
+    skipped.push(`${src} (not single-color: {${[...colors].join(', ')}} bg=${bg})`);
     continue;
   }
   const box = bbox(glyph);
