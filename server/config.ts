@@ -31,6 +31,7 @@ export function getJiraConfig(): JiraConfig {
       color: process.env.JIRA_FIELD_COLOR || undefined,
       count: process.env.JIRA_FIELD_COUNT || undefined,
       description: process.env.JIRA_FIELD_DESCRIPTION || undefined,
+      icon: process.env.JIRA_FIELD_ICON || undefined,
     },
   };
 }

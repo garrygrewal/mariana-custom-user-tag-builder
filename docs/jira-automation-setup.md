@@ -66,12 +66,20 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 
 ## 5. Field mapping notes
 
-If the design-request form writes to dedicated custom fields, set
-`JIRA_FIELD_TAG_NAME` / `JIRA_FIELD_COLOR` / `JIRA_FIELD_COUNT` /
-`JIRA_FIELD_DESCRIPTION` to their ids (find them via
-`/rest/api/3/field` or the automation rule's smart-value list). Otherwise the
-generator parses the tag name from the summary and the color/count from the
-description text.
+The UTR "Asset" request form writes to dedicated custom fields, mapped via env:
+
+| Form field | Env var | Field id |
+| --- | --- | --- |
+| Tag Name | `JIRA_FIELD_TAG_NAME` | `customfield_10307` |
+| Tag Color | `JIRA_FIELD_COLOR` | `customfield_10306` |
+| Total # of Tags | `JIRA_FIELD_COUNT` | `customfield_10416` |
+| Tag Icon (hint) | `JIRA_FIELD_ICON` | `customfield_10309` |
+
+`JIRA_FIELD_DESCRIPTION` is left unset, so the native description field supplies
+the free-text brief. When a field id is unset, the generator falls back to
+parsing the tag name from the summary and the color/count from the description
+text. (Find ids via `/rest/api/3/field`, the issue-type create metadata, or the
+automation rule's smart-value list.)
 
 ## 6. Local testing
 

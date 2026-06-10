@@ -131,7 +131,7 @@ function matchIcon(text: string, registry: IconDef[]): IconMatch | null {
  * Order: explicit short text -> library icon match -> letters intent -> complex.
  */
 export function classify(req: TagRequest, registry: IconDef[]): Classification {
-  const hay = `${req.tagName}\n${req.description}`;
+  const hay = `${req.tagName}\n${req.description}\n${req.iconHint ?? ''}`;
 
   // 1. Explicitly quoted short token, e.g. tag should say "AB".
   const quoted = hay.match(/["'\u2018\u2019\u201c\u201d]\s*([A-Za-z0-9.]{1,3})\s*["'\u2018\u2019\u201c\u201d]/);

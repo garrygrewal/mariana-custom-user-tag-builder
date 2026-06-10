@@ -93,4 +93,29 @@ describe('parseTicket', () => {
     expect(req.count).toBe(3);
     expect(req.description).toContain('laurel wreath');
   });
+
+  it('maps the UTR form fields (named color, numeric count, icon hint)', () => {
+    const issue: JiraIssue = {
+      key: 'UTR-81',
+      fields: {
+        summary: 'Custom User Tag: Lululemon employee',
+        description: 'clients wants a custom user tag that indicates when a user is a lululemon employee',
+        customfield_10306: 'red',
+        customfield_10307: 'lululemon employee',
+        customfield_10309: 'Lululemon logo',
+        customfield_10416: 1,
+      },
+    };
+    const req = parseTicket(issue, {
+      tagName: 'customfield_10307',
+      color: 'customfield_10306',
+      count: 'customfield_10416',
+      icon: 'customfield_10309',
+    });
+    expect(req.tagName).toBe('lululemon employee');
+    expect(req.bgHex).toBe('#E1251B'); // red
+    expect(req.colorMatched).toBe(true);
+    expect(req.count).toBe(1);
+    expect(req.iconHint).toBe('Lululemon logo');
+  });
 });

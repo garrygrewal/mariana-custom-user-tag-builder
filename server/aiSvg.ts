@@ -65,6 +65,7 @@ function userPrompt(
   const lines = [
     `Tag name: ${req.tagName}`,
     `Brief: ${req.description}`,
+    ...(req.iconHint ? [`Requested icon/visual: ${req.iconHint}`] : []),
     `Background color (use exactly): ${bgHex}`,
     `Foreground color (use exactly for the glyph): ${fgHex}`,
     '',

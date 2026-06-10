@@ -13,6 +13,8 @@ export interface TagRequest {
   count: number;
   /** Free-text brief describing the desired tag. */
   description: string;
+  /** Requested icon / visual hint from the ticket (e.g. "Lululemon logo"). */
+  iconHint?: string;
   dueDate?: string;
 }
 
@@ -32,6 +34,7 @@ export interface FieldMap {
   color?: string;
   count?: string;
   description?: string;
+  icon?: string;
 }
 
 /** Flatten Atlassian Document Format (ADF) or plain string into text. */
@@ -88,9 +91,10 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
   const descField = fieldString(fields, fieldMap.description).trim();
   const colorField = fieldString(fields, fieldMap.color).trim();
   const countField = fieldString(fields, fieldMap.count).trim();
+  const iconField = fieldString(fields, fieldMap.icon).trim();
 
   const description = descField || descriptionText || summary;
-  const searchText = [tagNameField, summary, description, colorField].join('\n');
+  const searchText = [tagNameField, summary, description, colorField, iconField].join('\n');
 
   const color = colorField
     ? extractColor(colorField)
@@ -109,6 +113,7 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
     colorMatched: color.matched,
     count,
     description,
+    iconHint: iconField || undefined,
     dueDate: typeof fields.duedate === 'string' ? fields.duedate : undefined,
   };
 }
