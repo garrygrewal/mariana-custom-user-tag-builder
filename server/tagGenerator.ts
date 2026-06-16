@@ -16,6 +16,7 @@ export interface GeneratedArtifact {
   png: Buffer;
   svgFileName: string;
   pngFileName: string;
+  zipFileName: string;
 }
 
 export interface GenerationResult {
@@ -36,7 +37,11 @@ export interface GenerateOptions {
 function fileNames(slug: string, hex: string, optionIndex?: number) {
   const suffix = optionIndex != null ? `_opt${optionIndex + 1}` : '';
   const base = `custom-tag_${slug}${suffix}_${hex.replace(/^#/, '').toLowerCase()}`;
-  return { svgFileName: `${base}.svg`, pngFileName: `${base}.png` };
+  return {
+    svgFileName: `${base}.svg`,
+    pngFileName: `${base}.png`,
+    zipFileName: `${base}.zip`,
+  };
 }
 
 function buildSimpleSvg(req: TagRequest, c: Classification, fgHex: string): string {
@@ -91,7 +96,13 @@ export async function generateTag(
       fgHex,
       warnings: [],
       artifacts: [
-        { svg, png: svgToPng(svg), svgFileName: names.svgFileName, pngFileName: names.pngFileName },
+        {
+          svg,
+          png: svgToPng(svg),
+          svgFileName: names.svgFileName,
+          pngFileName: names.pngFileName,
+          zipFileName: names.zipFileName,
+        },
       ],
     };
   }
@@ -113,6 +124,7 @@ export async function generateTag(
       png: svgToPng(svg),
       svgFileName: names.svgFileName,
       pngFileName: names.pngFileName,
+      zipFileName: names.zipFileName,
     };
   });
 

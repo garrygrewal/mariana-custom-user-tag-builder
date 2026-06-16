@@ -89,10 +89,12 @@ when a UTR ticket is created. For each ticket it:
    `JIRA_FIELD_*`), falling back to the summary/description text.
 2. Classifies and generates the tag(s) (builder or AI, per above) and
    rasterizes each SVG to PNG with `@resvg/resvg-js`.
-3. Attaches the SVG + PNG to the ticket and posts an internal **design-review
-   comment** that @mentions the reviewer and embeds the tag preview inline. It
-   never contains the client-facing prefix, so nothing is sent to a client
-   automatically — a designer reviews and forwards the approved tag.
+3. Attaches the SVG, PNG, and a ZIP bundle (SVG + PNG) to the ticket and posts
+   an internal **design-review comment** that @mentions the reviewer, embeds the
+   tag preview inline, and includes the ZIP for download. It never contains the
+   client-facing prefix, so nothing is sent to a client automatically — a
+   designer reviews and forwards the approved tag. The ticket is then moved to
+   **In Progress** on the Jira board.
 
 Notes:
 

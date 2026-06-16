@@ -8,6 +8,13 @@ export interface AdfDoc {
   content: unknown[];
 }
 
+/** A workflow transition available for an issue (from GET .../transitions). */
+export interface JiraTransition {
+  id: string;
+  name: string;
+  to: { name: string };
+}
+
 /** Reference to an uploaded attachment, including its media-services id. */
 export interface AttachmentRef {
   /** Numeric Jira attachment id. */
@@ -27,6 +34,7 @@ export interface JiraClientLike {
     mime: string,
   ): Promise<AttachmentRef>;
   addComment(key: string, body: AdfDoc): Promise<void>;
+  getTransitions(key: string): Promise<JiraTransition[]>;
   transition(key: string, transitionId: string): Promise<void>;
 }
 
@@ -136,6 +144,13 @@ export class JiraClient implements JiraClientLike {
       method: 'POST',
       body: JSON.stringify(payload),
     });
+  }
+
+  /** List workflow transitions available for an issue. */
+  async getTransitions(key: string): Promise<JiraTransition[]> {
+    const resp = await this.request(`/rest/api/3/issue/${key}/transitions`);
+    const data = (await resp.json()) as { transitions?: JiraTransition[] };
+    return data.transitions ?? [];
   }
 
   /** Transition an issue to a new status. */

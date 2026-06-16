@@ -12,7 +12,7 @@ vi.mock('ai', () => ({
 
 import { processTicket } from '../../server/processTicket';
 import { adfToText, type JiraIssue } from '../../server/ticket';
-import type { AdfDoc, AttachmentRef, JiraClientLike } from '../../server/jira';
+import type { AdfDoc, AttachmentRef, JiraClientLike, JiraTransition } from '../../server/jira';
 import type { JiraConfig } from '../../server/config';
 
 interface CapturedAttachment {
@@ -25,11 +25,15 @@ class FakeJiraClient implements JiraClientLike {
   attachments: CapturedAttachment[] = [];
   comments: AdfDoc[] = [];
   transitions: string[] = [];
+  availableTransitions: JiraTransition[] = [];
 
   constructor(private readonly issue: JiraIssue) {}
 
   async getIssue(): Promise<JiraIssue> {
     return this.issue;
+  }
+  async getTransitions(): Promise<JiraTransition[]> {
+    return this.availableTransitions;
   }
   async addAttachment(
     _key: string,
@@ -53,15 +57,17 @@ const config: JiraConfig = {
   email: 'bot@example.com',
   apiToken: 'token',
   fieldMap: {},
+  transitionStatus: undefined,
   reviewAccountId: 'acct-123',
   reviewMentionText: '@Reviewer',
 };
 
-/** Count embedded media (mediaSingle) nodes in a comment doc. */
-function mediaCount(doc: AdfDoc): number {
-  return doc.content.filter(
-    (n) => (n as { type?: string }).type === 'mediaSingle',
-  ).length;
+/** Count embedded file nodes (previews + zip bundles) in a comment doc. */
+function embeddedFileCount(doc: AdfDoc): number {
+  return doc.content.filter((n) => {
+    const type = (n as { type?: string }).type;
+    return type === 'mediaSingle' || type === 'mediaGroup';
+  }).length;
 }
 
 /** True if the comment @mentions the given accountId. */
@@ -99,10 +105,10 @@ describe('processTicket', () => {
     expect(result.isComplex).toBe(false);
     expect(result.mode).toBe('icon');
     expect(result.artifactCount).toBe(1);
-    expect(client.attachments).toHaveLength(2);
+    expect(client.attachments).toHaveLength(3);
 
     const mimes = client.attachments.map((a) => a.mime).sort();
-    expect(mimes).toEqual(['image/png', 'image/svg+xml']);
+    expect(mimes).toEqual(['application/zip', 'image/png', 'image/svg+xml']);
     expect(client.attachments.every((a) => a.size > 0)).toBe(true);
 
     expect(client.comments).toHaveLength(1);
@@ -110,8 +116,8 @@ describe('processTicket', () => {
     expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
     expect(mentions(client.comments[0], 'acct-123')).toBe(true);
-    // One PNG image embedded inline.
-    expect(mediaCount(client.comments[0])).toBe(1);
+    // One inline SVG preview and one ZIP download per artifact.
+    expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
 
   it('handles a simple letters tag via the builder (text mode)', async () => {
@@ -124,13 +130,13 @@ describe('processTicket', () => {
     expect(result.isComplex).toBe(false);
     expect(result.mode).toBe('text');
     expect(result.artifactCount).toBe(1);
-    expect(client.attachments).toHaveLength(2);
+    expect(client.attachments).toHaveLength(3);
     expect(client.attachments.every((a) => a.size > 0)).toBe(true);
 
     const text = commentText(client.comments[0]);
     expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
-    expect(mediaCount(client.comments[0])).toBe(1);
+    expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
 
   it('handles a complex ticket via the AI path and produces options', async () => {
@@ -146,13 +152,30 @@ describe('processTicket', () => {
     expect(result.isComplex).toBe(true);
     // count defaults to 1 -> 1 complex option (svg + png).
     expect(result.artifactCount).toBe(1);
-    expect(client.attachments).toHaveLength(2);
+    expect(client.attachments).toHaveLength(3);
 
     const text = commentText(client.comments[0]);
     expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
-    // One option -> one PNG image embedded inline.
-    expect(mediaCount(client.comments[0])).toBe(1);
+    // One option -> inline SVG preview plus ZIP bundle.
+    expect(embeddedFileCount(client.comments[0])).toBe(2);
+  });
+
+  it('moves the ticket to In Progress after posting the design-review comment', async () => {
+    const client = new FakeJiraClient(issueWith('VIP', 'show the letters VIP, color gold'));
+    client.availableTransitions = [
+      { id: '11', name: 'Start Progress', to: { name: 'In Progress' } },
+      { id: '21', name: 'Done', to: { name: 'Done' } },
+    ];
+
+    const reviewConfig: JiraConfig = {
+      ...config,
+      transitionStatus: 'In Progress',
+    };
+
+    await processTicket('UTR-100', { config: reviewConfig, client });
+
+    expect(client.transitions).toEqual(['11']);
   });
 
   it('posts a failure comment and rethrows when generation fails', async () => {
@@ -168,6 +191,7 @@ describe('processTicket', () => {
       },
       addComment: client.addComment.bind(client),
       addAttachment: client.addAttachment.bind(client),
+      getTransitions: client.getTransitions.bind(client),
       transition: client.transition.bind(client),
     };
 

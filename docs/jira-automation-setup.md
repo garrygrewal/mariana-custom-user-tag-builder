@@ -26,8 +26,8 @@ See [`.env.example`](../.env.example) for the full list and notes. Required:
 - `WEBHOOK_SECRET` (recommended)
 - `TAG_AI_MODEL` + AI Gateway auth (`AI_GATEWAY_API_KEY`) for complex tags
 
-Optional: custom field ids (`JIRA_FIELD_*`), `JIRA_TRANSITION_ID`,
-`JIRA_COMMENT_VISIBILITY_ROLE`, `FONT_TTF_PATH`.
+Optional: custom field ids (`JIRA_FIELD_*`), `JIRA_TRANSITION_STATUS`,
+`JIRA_TRANSITION_ID`, `JIRA_COMMENT_VISIBILITY_ROLE`, `FONT_TTF_PATH`.
 
 The function reads the icon library (`icons/`), font (`public/fonts/`), and
 guidelines (`docs/`) at runtime; these are bundled via `vercel.json`
@@ -56,15 +56,18 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 
 ## 4. What gets posted
 
-- **Attachments:** `custom-tag_<slug>_<hex>.svg` and `.png` (one pair per
+- **Attachments:** `custom-tag_<slug>_<hex>.svg`, `.png`, and `.zip` (one set per
   option; complex requests may include `Option 1..N`).
 - **Comment:** a design-review comment that @mentions the configured reviewer
-  (`JIRA_REVIEW_ACCOUNT_ID`) and embeds the generated tag SVG(s) inline at a
-  reduced size (vector, so they stay crisp). The
-  only text is: "DESIGN REVIEW NEEDED - Do not upload until approved by design.
-  Please wait for a designer to comment and approve these user tags." It
-  deliberately omits the client-facing comment prefix so nothing is sent to the
-  client automatically.
+  (`JIRA_REVIEW_ACCOUNT_ID`), embeds the generated tag SVG(s) inline at a
+  reduced size (vector, so they stay crisp), and includes a downloadable ZIP
+  bundle (SVG + PNG) per tag. The only text is: "DESIGN REVIEW NEEDED - Do not
+  upload until approved by design. Please wait for a designer to comment and
+  approve these user tags." It deliberately omits the client-facing comment
+  prefix so nothing is sent to the client automatically.
+- **Status:** after posting the review comment, the ticket is moved to **In
+  Progress** on the board (configurable via `JIRA_TRANSITION_STATUS`; set to
+  empty to disable, or set `JIRA_TRANSITION_ID` to use a specific transition).
 - **On failure:** a comment explaining the error so a designer can take over.
 
 ## 5. Field mapping notes

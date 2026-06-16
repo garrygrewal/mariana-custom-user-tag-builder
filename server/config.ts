@@ -5,8 +5,13 @@ export interface JiraConfig {
   email: string;
   apiToken: string;
   fieldMap: FieldMap;
-  /** Optional transition id to move the ticket after posting the draft. */
+  /** Optional transition id to move the ticket after design review is posted. */
   transitionId?: string;
+  /**
+   * Target status name when moving the ticket for design review (default: In Progress).
+   * Resolved via available transitions. Set to empty string to disable.
+   */
+  transitionStatus?: string;
   /** Optional project role name to restrict the draft comment's visibility. */
   commentVisibilityRole?: string;
   /** Atlassian accountId to @mention in the design-review comment. */
@@ -29,6 +34,10 @@ export function getJiraConfig(): JiraConfig {
     email: required('JIRA_EMAIL'),
     apiToken: required('JIRA_API_TOKEN'),
     transitionId: process.env.JIRA_TRANSITION_ID || undefined,
+    transitionStatus:
+      process.env.JIRA_TRANSITION_STATUS === ''
+        ? undefined
+        : (process.env.JIRA_TRANSITION_STATUS ?? 'In Progress'),
     commentVisibilityRole: process.env.JIRA_COMMENT_VISIBILITY_ROLE || undefined,
     reviewAccountId: process.env.JIRA_REVIEW_ACCOUNT_ID || undefined,
     reviewMentionText: process.env.JIRA_REVIEW_MENTION_TEXT || undefined,

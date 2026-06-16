@@ -1,13 +1,24 @@
 import { getJiraConfig, type JiraConfig } from './config.js';
-import { buildAdf, JiraClient, type AdfDoc, type JiraClientLike } from './jira.js';
+import {
+  buildAdf,
+  JiraClient,
+  type AdfDoc,
+  type JiraClientLike,
+  type JiraTransition,
+} from './jira.js';
 import { parseTicket } from './ticket.js';
 import { generateTag } from './tagGenerator.js';
+import { buildArtifactZip } from './artifactZip.js';
 
 const REVIEW_TEXT =
   ' DESIGN REVIEW NEEDED - Do not upload until approved by design. Please wait for a designer to comment and approve these user tags.';
 
 /** Inline display size (px) for embedded tag previews in the review comment. */
 const PREVIEW_PX = 96;
+
+type CommentEmbed =
+  | { kind: 'preview'; mediaId: string }
+  | { kind: 'zip'; mediaId: string };
 
 export interface ProcessResult {
   issueKey: string;
@@ -24,9 +35,9 @@ export interface ProcessDeps {
 
 /**
  * Build the design-review comment: a single line that @mentions the reviewer,
- * followed by the generated tag image(s) embedded inline via media nodes.
+ * followed by inline SVG preview(s) and downloadable ZIP bundle(s).
  */
-function buildReviewComment(config: JiraConfig, mediaIds: string[]): AdfDoc {
+function buildReviewComment(config: JiraConfig, embeds: CommentEmbed[]): AdfDoc {
   const paragraph: { type: 'paragraph'; content: unknown[] } = {
     type: 'paragraph',
     content: [],
@@ -41,20 +52,69 @@ function buildReviewComment(config: JiraConfig, mediaIds: string[]): AdfDoc {
     paragraph.content.push({ type: 'text', text: REVIEW_TEXT.trimStart() });
   }
 
-  // Embed each preview as a vector SVG sized down so it stays crisp (no
-  // upscaling/pixelation) and isn't oversized in the comment stream.
-  const media = mediaIds.map((id) => ({
-    type: 'mediaSingle',
-    attrs: { layout: 'center', width: PREVIEW_PX, widthType: 'pixel' },
-    content: [
-      {
-        type: 'media',
-        attrs: { type: 'file', id, collection: '', width: PREVIEW_PX, height: PREVIEW_PX },
-      },
-    ],
-  }));
+  const media = embeds.map((embed) => {
+    if (embed.kind === 'preview') {
+      return {
+        type: 'mediaSingle',
+        attrs: { layout: 'center', width: PREVIEW_PX, widthType: 'pixel' },
+        content: [
+          {
+            type: 'media',
+            attrs: {
+              type: 'file',
+              id: embed.mediaId,
+              collection: '',
+              width: PREVIEW_PX,
+              height: PREVIEW_PX,
+            },
+          },
+        ],
+      };
+    }
+    return {
+      type: 'mediaGroup',
+      content: [
+        {
+          type: 'media',
+          attrs: { type: 'file', id: embed.mediaId, collection: '' },
+        },
+      ],
+    };
+  });
 
   return { type: 'doc', version: 1, content: [paragraph, ...media] };
+}
+
+/** Move the ticket to the configured design-review column (default: In Progress). */
+async function transitionForDesignReview(
+  issueKey: string,
+  config: JiraConfig,
+  client: JiraClientLike,
+): Promise<void> {
+  if (config.transitionId) {
+    await client.transition(issueKey, config.transitionId);
+    return;
+  }
+
+  const statusName = config.transitionStatus;
+  if (!statusName) return;
+
+  const transitions = await client.getTransitions(issueKey);
+  const match = findTransitionToStatus(transitions, statusName);
+  if (!match) {
+    throw new Error(
+      `No transition to status "${statusName}" available for ${issueKey}`,
+    );
+  }
+  await client.transition(issueKey, match.id);
+}
+
+function findTransitionToStatus(
+  transitions: JiraTransition[],
+  statusName: string,
+): JiraTransition | undefined {
+  const target = statusName.toLowerCase();
+  return transitions.find((t) => t.to.name.toLowerCase() === target);
 }
 
 function buildFailureComment(error: unknown): AdfDoc {
@@ -83,7 +143,7 @@ export async function processTicket(
     const result = await generateTag(req);
 
     const attachments: string[] = [];
-    const previewMediaIds: string[] = [];
+    const commentEmbeds: CommentEmbed[] = [];
     for (const artifact of result.artifacts) {
       // Embed the SVG inline (vector — stays crisp at small sizes); keep the
       // PNG as a ticket attachment for quick download/preview.
@@ -99,14 +159,33 @@ export async function processTicket(
         artifact.png,
         'image/png',
       );
-      previewMediaIds.push(svgRef.mediaId);
-      attachments.push(artifact.svgFileName, artifact.pngFileName);
+      const zipBytes = await buildArtifactZip(
+        artifact.svg,
+        artifact.png,
+        artifact.svgFileName,
+        artifact.pngFileName,
+      );
+      const zipRef = await client.addAttachment(
+        issueKey,
+        artifact.zipFileName,
+        zipBytes,
+        'application/zip',
+      );
+      commentEmbeds.push({ kind: 'preview', mediaId: svgRef.mediaId });
+      commentEmbeds.push({ kind: 'zip', mediaId: zipRef.mediaId });
+      attachments.push(artifact.svgFileName, artifact.pngFileName, artifact.zipFileName);
     }
 
-    await client.addComment(issueKey, buildReviewComment(config, previewMediaIds));
+    await client.addComment(issueKey, buildReviewComment(config, commentEmbeds));
 
-    if (config.transitionId) {
-      await client.transition(issueKey, config.transitionId);
+    try {
+      await transitionForDesignReview(issueKey, config, client);
+    } catch (transitionError) {
+      // Tags and review comment are already on the ticket; don't fail the run.
+      console.error(
+        `Design-review transition failed for ${issueKey}:`,
+        transitionError,
+      );
     }
 
     return {
