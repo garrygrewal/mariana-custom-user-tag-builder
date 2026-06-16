@@ -1,6 +1,11 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { IconDef } from '../src/types.js';
+import {
+  hydrateNucleoIcon,
+  isNucleoIconId,
+  loadNucleoIconRegistry,
+} from './nucleoIcons.node.js';
 import { resolveProjectPath } from './paths.js';
 
 /** Supports both single- and double-quoted viewBox attributes. */
@@ -25,15 +30,11 @@ function labelFromId(id: string): string {
   return id.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-let cache: IconDef[] | null = null;
+let curatedCache: IconDef[] | null = null;
+let mergedCache: IconDef[] | null = null;
 
-/**
- * Read the `icons/*.svg` library from disk into the same IconDef shape the
- * browser registry uses. Mirrors src/lib/icons.ts but uses fs instead of the
- * Vite glob import so it runs in a Node/serverless environment.
- */
-export function loadIconRegistry(): IconDef[] {
-  if (cache) return cache;
+function loadCuratedIconRegistry(): IconDef[] {
+  if (curatedCache) return curatedCache;
 
   const dir = resolveProjectPath('icons');
   let files: string[] = [];
@@ -43,7 +44,7 @@ export function loadIconRegistry(): IconDef[] {
     files = [];
   }
 
-  cache = files
+  curatedCache = files
     .map((file) => {
       const svgContent = readFileSync(resolve(dir, file), 'utf8');
       const id = idFromFile(file);
@@ -56,9 +57,28 @@ export function loadIconRegistry(): IconDef[] {
     })
     .sort((a, b) => a.id.localeCompare(b.id));
 
-  return cache;
+  return curatedCache;
+}
+
+/**
+ * Curated `icons/*.svg` plus lazy Nucleo entries from `icons/nucleo_core_svg_v1.7.0/`.
+ * Nucleo SVGs are read from disk on first render via getIconById.
+ */
+export function loadIconRegistry(): IconDef[] {
+  if (mergedCache) return mergedCache;
+  mergedCache = [...loadCuratedIconRegistry(), ...loadNucleoIconRegistry()];
+  return mergedCache;
 }
 
 export function getIconById(iconId: string): IconDef | null {
-  return loadIconRegistry().find((icon) => icon.id === iconId) ?? null;
+  const icon = loadIconRegistry().find((entry) => entry.id === iconId) ?? null;
+  if (!icon) return null;
+  if (isNucleoIconId(iconId)) return hydrateNucleoIcon(icon);
+  return icon;
+}
+
+/** @internal Test helper — clears cached registries between runs. */
+export function clearIconRegistryCache(): void {
+  curatedCache = null;
+  mergedCache = null;
 }

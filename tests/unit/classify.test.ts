@@ -66,8 +66,9 @@ describe('classify', () => {
       req({ tagName: 'Pregnant', description: 'indicate a pregnant client' }),
       registry,
     );
-    expect(c.isComplex).toBe(true);
-    expect(c.confidence).toBe('high');
+    // Nucleo includes a pregnant icon — prefer that over LLM authorship.
+    expect(c.isComplex).toBe(false);
+    expect(c.iconId).toBe('nucleo-pregnant-woman');
   });
 
   it('assigns low confidence for UTR-85-shaped angel/halo hint matching person', () => {
@@ -105,5 +106,34 @@ describe('classify', () => {
     const c = classify(req({ tagName: 'VIP' }), registry);
     expect(c.confidence).toBe('high');
     expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('matches UTR-86 from icon hint via Nucleo without AI fallback', () => {
+    const c = classify(
+      req({
+        tagName: 'World Cup Attendee',
+        description:
+          'Average Joes Gym wants a custom user tag for customers who attended the world cup',
+        iconHint: 'Earth or globe',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toMatch(/^nucleo-(earth|globe)/);
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('does not let a studio name in the description override an icon hint', () => {
+    const c = classify(
+      req({
+        tagName: 'World Cup Attendee',
+        description: 'Average Joes Gym wants a custom user tag',
+        iconHint: 'Earth or globe',
+      }),
+      registry,
+    );
+    expect(c.iconId).not.toBe('dumbbell');
   });
 });

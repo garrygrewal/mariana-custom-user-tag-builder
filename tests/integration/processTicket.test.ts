@@ -142,8 +142,8 @@ describe('processTicket', () => {
   it('handles a complex ticket via the AI path and produces options', async () => {
     const client = new FakeJiraClient(
       issueWith(
-        'Lightning Bolt',
-        'Please design a lightning bolt tag using #7B2FF7 for our energy program.',
+        'Zzyx',
+        'Abstract zzyx marker for our loyalty tier using #7B2FF7.',
       ),
     );
 
@@ -205,6 +205,49 @@ describe('processTicket', () => {
     await processTicket('UTR-100', { config: reviewConfig, client });
 
     expect(client.transitions).toEqual(['11']);
+  });
+
+  it('handles UTR-86 with a Nucleo globe and no AI fallback', async () => {
+    const client = new FakeJiraClient({
+      key: 'UTR-86',
+      fields: {
+        summary: '(TEST) World Cup Custom User Tag',
+        description:
+          'Average Joes Gym wants a custom user tag for customers who attended the world cup',
+        customfield_10307: 'World Cup Attendee',
+        customfield_10306: 'Gold',
+        customfield_10416: 1,
+        customfield_10309: 'Earth or globe',
+      },
+    });
+
+    const reviewConfig: JiraConfig = {
+      ...config,
+      fieldMap: {
+        tagName: 'customfield_10307',
+        color: 'customfield_10306',
+        count: 'customfield_10416',
+        icon: 'customfield_10309',
+      },
+    };
+
+    const result = await processTicket('UTR-86', { config: reviewConfig, client });
+
+    expect(result.isComplex).toBe(false);
+    expect(result.mode).toBe('icon');
+    expect(result.artifactCount).toBe(1);
+    expect(client.attachments).toHaveLength(3);
+    expect(client.attachments.every((a) => a.size > 0)).toBe(true);
+
+    const svgNames = client.attachments
+      .filter((a) => a.mime === 'image/svg+xml')
+      .map((a) => a.fileName);
+    expect(svgNames.some((n) => n.includes('_ai_'))).toBe(false);
+
+    const text = commentText(client.comments[0]);
+    expect(text).toContain('DESIGN REVIEW NEEDED');
+    expect(text).not.toContain('Option B (AI-generated)');
+    expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
 
   it('posts a failure comment and rethrows when generation fails', async () => {

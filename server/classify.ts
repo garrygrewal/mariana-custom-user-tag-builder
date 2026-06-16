@@ -1,8 +1,11 @@
 import type { IconDef } from '../src/types.js';
 import { TEXT_MAX_LENGTH } from '../src/constants.js';
+import { isNucleoIconId } from './nucleoIcons.node.js';
 import type { TagRequest } from './ticket.js';
 
 export type Confidence = 'high' | 'low';
+
+export type IconMatchSource = 'priority' | 'full';
 
 export interface Classification {
   /** When true, route to the LLM SVG author; otherwise to the builder. */
@@ -75,6 +78,11 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   alert: ['alert', 'warning', 'exclamation', 'caution'],
   dollar: ['dollar', 'payment', 'money'],
   'friends-family': ['friends', 'family', 'household'],
+  'nucleo-earth': ['earth', 'globe', 'world', 'global', 'planet'],
+  'nucleo-globe-2': ['globe', 'earth', 'world', 'global', 'planet'],
+  'nucleo-soccer': ['soccer', 'football', 'futbol'],
+  'nucleo-soccer-ball': ['soccer', 'football', 'ball'],
+  'nucleo-trophy': ['trophy', 'winner', 'champion', 'award'],
 };
 
 /** Library icons that are weak defaults when matched without strong intent. */
@@ -102,6 +110,7 @@ const STOP_WORDS = new Set([
   'needs',
   'want',
   'requested',
+  'wants',
   'a',
   'an',
   'or',
@@ -116,6 +125,8 @@ const STOP_WORDS = new Set([
   'be',
   'has',
   'have',
+  'who',
+  'attended',
 ]);
 
 /** Tag-name filler that should not alone trigger a semantic-gap signal. */
@@ -129,6 +140,7 @@ const TAG_FILLER = new Set([
   'program',
   'club',
   'badge',
+  'attendee',
 ]);
 
 const LOW_MATCH_SCORE = 35;
@@ -241,7 +253,7 @@ function isSalientToken(token: string): boolean {
 }
 
 function strongCuratedIntent(match: IconMatch, req: TagRequest): boolean {
-  const intentHay = `${req.tagName}\n${req.description}\n${req.iconHint ?? ''}`.toLowerCase();
+  const intentHay = `${req.tagName}\n${req.iconHint ?? ''}`.toLowerCase();
   const curated = new Set(keywordsForIcon(match.icon).curated);
   return match.matchedTerms.some((term) => curated.has(term) && intentHay.includes(term));
 }
@@ -269,6 +281,61 @@ function tagNameSemanticGap(
   );
 }
 
+function iconHintBranches(iconHint: string): Set<string>[] {
+  return iconHint.split(/\bor\b/i).map((branch) => tokenize(branch));
+}
+
+function iconHintSatisfied(req: TagRequest, match: IconMatch): boolean {
+  if (!req.iconHint?.trim()) return false;
+
+  const branches = iconHintBranches(req.iconHint);
+  if (branches.length > 1) {
+    return branches.some((branch) =>
+      match.matchedTerms.some((term) => branch.has(term)),
+    );
+  }
+
+  const hintTokens = tokenize(req.iconHint);
+  return match.matchedTerms.some((term) => hintTokens.has(term));
+}
+
+function buildMatchHaystacks(req: TagRequest): { priority: string; full: string } {
+  const priority = [req.iconHint, req.tagName].filter(Boolean).join('\n');
+  const full = priority
+    ? `${priority}\n${req.description}`
+    : `${req.tagName}\n${req.description}`;
+  return { priority, full };
+}
+
+function pickIconMatch(
+  req: TagRequest,
+  registry: IconDef[],
+): { match: IconMatch; ranked: IconMatch[]; source: IconMatchSource } | null {
+  const { priority, full } = buildMatchHaystacks(req);
+  const hay = req.iconHint?.trim() ? priority : full;
+
+  const curated = registry.filter((icon) => !isNucleoIconId(icon.id));
+  const nucleo = registry.filter((icon) => isNucleoIconId(icon.id));
+
+  const curatedRanked = rankIconMatches(hay, curated);
+  if (curatedRanked[0]) {
+    return {
+      match: curatedRanked[0],
+      ranked: curatedRanked,
+      source: req.iconHint?.trim() ? 'priority' : 'full',
+    };
+  }
+
+  const nucleoRanked = rankIconMatches(hay, nucleo);
+  if (!nucleoRanked[0]) return null;
+
+  return {
+    match: nucleoRanked[0],
+    ranked: nucleoRanked,
+    source: req.iconHint?.trim() ? 'priority' : 'full',
+  };
+}
+
 interface ConfidenceAssessment {
   confidence: Confidence;
   fallbackToAi: boolean;
@@ -277,11 +344,56 @@ interface ConfidenceAssessment {
   reasonSuffix: string;
 }
 
+function unmatchedHintTerms(req: TagRequest, match: IconMatch): string[] {
+  if (!req.iconHint?.trim()) return [];
+  const iconKeywords = allIconKeywords(match.icon);
+  const matched = new Set(match.matchedTerms);
+  return [...tokenize(req.iconHint)].filter(
+    (t) => isSalientToken(t) && !matched.has(t) && !iconKeywords.has(t),
+  );
+}
+
 function assessIconConfidence(
   req: TagRequest,
   match: IconMatch,
   runnerUp: IconMatch | null,
+  source: IconMatchSource,
 ): ConfidenceAssessment {
+  const unmatchedInHint = unmatchedHintTerms(req, match);
+  const hintPartial =
+    source === 'priority' &&
+    iconHintSatisfied(req, match) &&
+    unmatchedInHint.length > 0 &&
+    (GENERIC_ICON_IDS.has(match.icon.id) || !match.curatedHit);
+
+  if (hintPartial) {
+    return {
+      confidence: 'low',
+      fallbackToAi: true,
+      matchedTerms: match.matchedTerms,
+      unmatchedTerms: unmatchedInHint,
+      reasonSuffix: ` Low confidence (icon hint partially matched; missing ${unmatchedInHint.join(', ')}); including AI fallback.`,
+    };
+  }
+
+  if (source === 'priority' && iconHintSatisfied(req, match)) {
+    return {
+      confidence: 'high',
+      fallbackToAi: false,
+      matchedTerms: match.matchedTerms,
+      reasonSuffix: ' Matched from icon hint / tag name.',
+    };
+  }
+
+  if (isNucleoIconId(match.icon.id) && source === 'priority' && match.score >= LOW_MATCH_SCORE) {
+    return {
+      confidence: 'high',
+      fallbackToAi: false,
+      matchedTerms: match.matchedTerms,
+      reasonSuffix: ' Matched Nucleo icon from icon hint / tag name.',
+    };
+  }
+
   const matchedTermSet = new Set(match.matchedTerms);
   const iconKeywords = allIconKeywords(match.icon);
   const lowSignals: string[] = [];
@@ -308,7 +420,7 @@ function assessIconConfidence(
     }
   }
 
-  if (req.iconHint && /\bor\b/i.test(req.iconHint)) {
+  if (req.iconHint && /\bor\b/i.test(req.iconHint) && !iconHintSatisfied(req, match)) {
     lowSignals.push('disjunction in icon hint');
   }
 
@@ -352,9 +464,12 @@ function highTextClassification(
  * Classify a tag request as simple (builder) or complex (LLM SVG).
  *
  * Order: explicit short text -> library icon match -> letters intent -> complex.
+ * When an icon hint is present, only the hint and tag name are used for icon
+ * matching so studio names in the description cannot misroute the request.
  */
 export function classify(req: TagRequest, registry: IconDef[]): Classification {
-  const hay = `${req.tagName}\n${req.description}\n${req.iconHint ?? ''}`;
+  const { priority, full } = buildMatchHaystacks(req);
+  const hay = req.iconHint?.trim() ? priority : full;
 
   const quoted = hay.match(/["'\u2018\u2019\u201c\u201d]\s*([A-Za-z0-9.]{1,3})\s*["'\u2018\u2019\u201c\u201d]/);
   if (quoted) {
@@ -374,20 +489,20 @@ export function classify(req: TagRequest, registry: IconDef[]): Classification {
     }
   }
 
-  const ranked = rankIconMatches(hay, registry);
-  const iconMatch = ranked[0] ?? null;
-  if (iconMatch) {
-    const assessment = assessIconConfidence(req, iconMatch, ranked[1] ?? null);
+  const picked = pickIconMatch(req, registry);
+  if (picked) {
+    const runnerUp = picked.ranked[1] ?? null;
+    const assessment = assessIconConfidence(req, picked.match, runnerUp, picked.source);
     return {
       isComplex: false,
       mode: 'icon',
-      iconId: iconMatch.icon.id,
-      iconLabel: iconMatch.icon.label,
+      iconId: picked.match.icon.id,
+      iconLabel: picked.match.icon.label,
       confidence: assessment.confidence,
       fallbackToAi: assessment.fallbackToAi,
       matchedTerms: assessment.matchedTerms,
       unmatchedTerms: assessment.unmatchedTerms,
-      reason: `Matched library icon "${iconMatch.icon.id}".${assessment.reasonSuffix}`,
+      reason: `Matched library icon "${picked.match.icon.id}".${assessment.reasonSuffix}`,
     };
   }
 
