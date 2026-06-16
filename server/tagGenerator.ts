@@ -20,6 +20,8 @@ export interface GeneratedArtifact {
   pngFileName: string;
   zipFileName: string;
   source: ArtifactSource;
+  /** Human label when this artifact is one of several distinct requested tags. */
+  label?: string;
 }
 
 export interface GenerationResult {
@@ -86,6 +88,66 @@ function buildSimpleSvg(req: TagRequest, c: Classification, fgHex: string): stri
  * artifacts plus the routing decision and any advisory warnings.
  */
 export async function generateTag(
+  req: TagRequest,
+  options: GenerateOptions = {},
+): Promise<GenerationResult> {
+  if (req.variants && req.variants.length >= req.count && req.count > 1) {
+    return generateDistinctTags(req, options);
+  }
+  return generateSingleTag(req, options);
+}
+
+async function generateDistinctTags(
+  req: TagRequest,
+  options: GenerateOptions,
+): Promise<GenerationResult> {
+  const variants = req.variants!.slice(0, req.count);
+  const artifacts: GeneratedArtifact[] = [];
+  const warnings: string[] = [];
+  let classification: Classification | null = null;
+  let aiModel: string | undefined;
+  let anyComplex = false;
+
+  for (const variant of variants) {
+    const variantReq: TagRequest = {
+      ...req,
+      tagName: variant.label,
+      iconHint: variant.iconHint ?? req.iconHint,
+      bgHex: variant.bgHex,
+      colorMatched: variant.colorMatched,
+      count: 1,
+      variants: undefined,
+    };
+    const result = await generateSingleTag(variantReq, { ...options, optionCount: 1 });
+    anyComplex = anyComplex || result.classification.isComplex;
+    classification = classification ?? result.classification;
+    aiModel = result.aiModel ?? aiModel;
+    warnings.push(...result.warnings);
+
+    for (const artifact of result.artifacts) {
+      artifacts.push({ ...artifact, label: variant.label });
+    }
+  }
+
+  return {
+    classification: {
+      ...(classification ?? {
+        isComplex: anyComplex,
+        mode: 'icon',
+        confidence: 'high',
+        reason: 'Multi-tag request',
+      }),
+      isComplex: anyComplex || (classification?.isComplex ?? false),
+    },
+    bgHex: variants[0]?.bgHex ?? req.bgHex,
+    fgHex: pickForeground(variants[0]?.bgHex ?? req.bgHex),
+    warnings: Array.from(new Set(warnings)),
+    aiModel,
+    artifacts,
+  };
+}
+
+async function generateSingleTag(
   req: TagRequest,
   options: GenerateOptions = {},
 ): Promise<GenerationResult> {

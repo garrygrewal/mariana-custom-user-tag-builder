@@ -120,6 +120,12 @@ function userPrompt(
         ' visually distinct interpretation (different metaphor, composition, or framing)' +
         ' from the other variations.',
     );
+  } else if (req.iconHint) {
+    lines.push(
+      '',
+      `Focus the glyph on the requested visual: ${req.iconHint}.`,
+      'Do not combine multiple unrelated concepts into one icon.',
+    );
   }
   if (validationFeedback) {
     lines.push(

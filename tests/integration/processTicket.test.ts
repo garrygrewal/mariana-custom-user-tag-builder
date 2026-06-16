@@ -1,13 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
 
-const MOCK_SVG =
-  '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">' +
-  '<circle cx="15" cy="15" r="15" fill="#7B2FF7"/>' +
-  '<path d="M9 9h12v12H9z" fill="#FFFFFF"/></svg>';
+const DEFAULT_MOCK_BG = '#7B2FF7';
+
+function mockSvgForPrompt(prompt: string): string {
+  const bgMatch = prompt.match(/Background color \(use exactly\): (#[0-9A-F]{6})/i);
+  const bg = bgMatch?.[1]?.toUpperCase() ?? DEFAULT_MOCK_BG;
+  return (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">' +
+    `<circle cx="15" cy="15" r="15" fill="${bg}"/>` +
+    '<path d="M9 9h12v12H9z" fill="#FFFFFF"/></svg>'
+  );
+}
 
 // Avoid any real network call from the complex (AI) path.
 vi.mock('ai', () => ({
-  generateText: vi.fn(async () => ({ text: MOCK_SVG })),
+  generateText: vi.fn(async ({ prompt }: { prompt: string }) => ({
+    text: mockSvgForPrompt(prompt),
+  })),
 }));
 
 import { processTicket } from '../../server/processTicket';
@@ -205,6 +214,48 @@ describe('processTicket', () => {
     await processTicket('UTR-100', { config: reviewConfig, client });
 
     expect(client.transitions).toEqual(['11']);
+  });
+
+  it('handles UTR-87 as two distinct tags with per-tag labels', async () => {
+    const client = new FakeJiraClient({
+      key: 'UTR-87',
+      fields: {
+        summary: '(TEST) World Flex Gym Custom User Tag Request',
+        description: 'World Flex Gym wants a custom user tag request for good and bad ombrés',
+        customfield_10306: 'green for good and red for bad',
+        customfield_10307: 'good and bad ombres',
+        customfield_10309: 'smiling emoji for the good tag, and sad emoji for the bad tag',
+        customfield_10416: 2,
+      },
+    });
+
+    const reviewConfig: JiraConfig = {
+      ...config,
+      fieldMap: {
+        tagName: 'customfield_10307',
+        color: 'customfield_10306',
+        count: 'customfield_10416',
+        icon: 'customfield_10309',
+      },
+    };
+
+    const result = await processTicket('UTR-87', { config: reviewConfig, client });
+
+    expect(result.isComplex).toBe(false);
+    expect(result.mode).toBe('icon');
+    expect(result.artifactCount).toBe(2);
+    expect(client.attachments).toHaveLength(6);
+
+    const svgNames = client.attachments
+      .filter((a) => a.mime === 'image/svg+xml')
+      .map((a) => a.fileName);
+    expect(svgNames.some((n) => n.includes('_ai_'))).toBe(false);
+
+    const text = commentText(client.comments[0]);
+    expect(text).toContain('Good ombres (library)');
+    expect(text).toContain('Bad ombres (library)');
+    expect(text).not.toContain('AI-generated');
+    expect(embeddedFileCount(client.comments[0])).toBe(4);
   });
 
   it('handles UTR-86 with a Nucleo globe and no AI fallback', async () => {

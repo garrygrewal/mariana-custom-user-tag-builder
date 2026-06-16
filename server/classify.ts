@@ -83,6 +83,41 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   'nucleo-soccer': ['soccer', 'football', 'futbol'],
   'nucleo-soccer-ball': ['soccer', 'football', 'ball'],
   'nucleo-trophy': ['trophy', 'winner', 'champion', 'award'],
+  'nucleo-face-smile': ['smile', 'smiling', 'happy', 'emoji'],
+  'nucleo-face-sad': ['sad', 'unhappy', 'emoji'],
+  'nucleo-face-sad-crying': ['crying', 'cry', 'upset', 'emoji'],
+  'nucleo-face-smile-wink': ['wink', 'winking', 'emoji'],
+  'nucleo-face-angry': ['angry', 'mad', 'furious', 'upset'],
+  'nucleo-face-surprised': ['surprised', 'surprise', 'shock', 'shocked', 'wow'],
+  'nucleo-face-laughing': ['laughing', 'laugh', 'lol', 'haha'],
+  'nucleo-face-kiss': ['kiss', 'romance'],
+  'nucleo-face-tired': ['tired', 'exhausted', 'burnout'],
+  'nucleo-face-mask': ['mask', 'covid', 'sick'],
+  'nucleo-thumbs-up': ['thumbs', 'up', 'like', 'approve', 'positive', 'thumbs-up'],
+  'nucleo-thumbs-down': ['down', 'dislike', 'negative', 'thumbs-down'],
+  'nucleo-clapping-hands': ['clapping', 'clap', 'applause', 'celebrate'],
+  'nucleo-hands-praying': ['praying', 'gratitude', 'namaste', 'thanks'],
+  'nucleo-cake': ['birthday', 'bday', 'celebration', 'cake'],
+  'nucleo-skull': ['skull', 'danger', 'toxic'],
+  'nucleo-party': ['party', 'celebrate', 'celebration'],
+  'nucleo-high-five': ['high-five', 'highfive'],
+  'nucleo-crown': ['vip', 'premium', 'elite', 'exclusive', 'crown'],
+  'nucleo-new': ['new', 'rookie', 'newcomer'],
+  'nucleo-user-plus': ['signup', 'join', 'new-member'],
+  'nucleo-mat': ['pilates', 'mat', 'reformer'],
+  'nucleo-punching-bag': ['kickboxing', 'kickbox', 'martial'],
+  'nucleo-exercise-bike': ['spin', 'spinning', 'cycle'],
+  'nucleo-surfboard': ['surf', 'surfing'],
+  'nucleo-dog': ['dog', 'pet', 'puppy', 'canine'],
+  'nucleo-paw': ['pet', 'paw', 'animal'],
+  'nucleo-accessibility': ['accessible', 'a11y', 'ada'],
+  'nucleo-heart': ['heart', 'love', 'valentine'],
+  'nucleo-pregnant-woman': ['pregnant', 'pregnancy', 'expecting', 'maternity'],
+  'nucleo-users-shaking-hands': ['referral', 'friend', 'invite'],
+  'nucleo-discount-2': ['promo', 'promotion', 'sale'],
+  'nucleo-sun': ['sun', 'sunny', 'hot'],
+  'nucleo-cloud-showers': ['rain', 'rainy', 'weather'],
+  'nucleo-ambulance': ['ambulance', 'ems'],
 };
 
 /** Library icons that are weak defaults when matched without strong intent. */
@@ -146,6 +181,9 @@ const TAG_FILLER = new Set([
 const LOW_MATCH_SCORE = 35;
 const CLOSE_SCORE_MARGIN = 12;
 
+/** Id segments too ambiguous to use as generic keyword hits (e.g. pregnancy-"test"). */
+const ICON_ID_STOP_WORDS = new Set(['test', 'nucleo']);
+
 function normalizeTextToken(token: string): string | null {
   const cleaned = token.toUpperCase().replace(/[^A-Z0-9.]/g, '');
   if (!cleaned || cleaned.length > TEXT_MAX_LENGTH) return null;
@@ -155,6 +193,33 @@ function normalizeTextToken(token: string): string | null {
 function tokenize(text: string): Set<string> {
   const tokens = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
   return new Set(tokens);
+}
+
+/** Expand hint tokens with simple stems so "smiling" can match icon id "smile". */
+function expandMatchTokens(tokens: Set<string>): Set<string> {
+  const expanded = new Set(tokens);
+  for (const token of tokens) {
+    if (token.endsWith('ing') && token.length >= 5) {
+      const stem = token.slice(0, -3);
+      if (stem.length >= 3) expanded.add(stem);
+      expanded.add(`${stem}e`);
+    }
+    if (token.endsWith('ed') && token.length >= 5) {
+      const stem = token.slice(0, -2);
+      if (stem.length >= 3) expanded.add(stem);
+      expanded.add(`${stem}e`);
+    }
+  }
+  return expanded;
+}
+
+function matchTokens(text: string): Set<string> {
+  const words = text.toLowerCase().match(/[a-z0-9]+/g) ?? [];
+  const tokens = expandMatchTokens(new Set(words));
+  for (let i = 0; i < words.length - 1; i++) {
+    tokens.add(`${words[i]}-${words[i + 1]}`);
+  }
+  return tokens;
 }
 
 interface IconKeywords {
@@ -169,10 +234,10 @@ function keywordsForIcon(icon: IconDef): IconKeywords {
   const fromLabel = icon.label.toLowerCase().split(/\s+/);
   const curated = (ICON_SYNONYMS[icon.id] ?? [])
     .map((k) => k.trim())
-    .filter((k) => /^[a-z]{3,}$/.test(k));
+    .filter((k) => /^[a-z0-9-]{3,}$/.test(k));
   const generic = [...fromId, ...fromLabel]
     .map((k) => k.trim())
-    .filter((k) => /^[a-z]{4,}$/.test(k));
+    .filter((k) => /^[a-z]{4,}$/.test(k) && !ICON_ID_STOP_WORDS.has(k));
   return { curated: Array.from(new Set(curated)), generic: Array.from(new Set(generic)) };
 }
 
@@ -191,7 +256,7 @@ export interface IconMatch {
 }
 
 function rankIconMatches(text: string, registry: IconDef[]): IconMatch[] {
-  const tokens = tokenize(text);
+  const tokens = matchTokens(text);
 
   const discount = text.match(/(\d{1,3})\s*%?\s*off\b/i);
   if (discount) {
@@ -291,11 +356,11 @@ function iconHintSatisfied(req: TagRequest, match: IconMatch): boolean {
   const branches = iconHintBranches(req.iconHint);
   if (branches.length > 1) {
     return branches.some((branch) =>
-      match.matchedTerms.some((term) => branch.has(term)),
+      match.matchedTerms.some((term) => expandMatchTokens(branch).has(term)),
     );
   }
 
-  const hintTokens = tokenize(req.iconHint);
+  const hintTokens = matchTokens(req.iconHint);
   return match.matchedTerms.some((term) => hintTokens.has(term));
 }
 

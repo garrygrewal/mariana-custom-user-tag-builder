@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { extractColor, normalizeHex, DEFAULT_BG_HEX } from '../../server/colors';
-import { parseTicket, adfToText, type JiraIssue } from '../../server/ticket';
+import {
+  parseTicket,
+  adfToText,
+  splitConjoinedSpecs,
+  parseSpecSegment,
+  type JiraIssue,
+} from '../../server/ticket';
 
 describe('normalizeHex', () => {
   it('expands shorthand and uppercases', () => {
@@ -117,5 +123,57 @@ describe('parseTicket', () => {
     expect(req.colorMatched).toBe(true);
     expect(req.count).toBe(1);
     expect(req.iconHint).toBe('Lululemon logo');
+    expect(req.variants).toBeUndefined();
+  });
+
+  it('parses UTR-87 as two distinct tag specs (happy/sad emoji, green/red)', () => {
+    const issue: JiraIssue = {
+      key: 'UTR-87',
+      fields: {
+        summary: '(TEST) World Flex Gym Custom User Tag Request',
+        description: 'World Flex Gym wants a custom user tag request for good and bad ombrés',
+        customfield_10306: 'green for good and red for bad',
+        customfield_10307: 'good and bad ombres',
+        customfield_10309: 'smiling emoji for the good tag, and sad emoji for the bad tag',
+        customfield_10416: 2,
+      },
+    };
+    const req = parseTicket(issue, {
+      tagName: 'customfield_10307',
+      color: 'customfield_10306',
+      count: 'customfield_10416',
+      icon: 'customfield_10309',
+    });
+
+    expect(req.count).toBe(2);
+    expect(req.variants).toHaveLength(2);
+    expect(req.variants![0]).toMatchObject({
+      label: 'Good ombres',
+      iconHint: 'smiling emoji',
+      bgHex: '#3DAE2B',
+      colorMatched: true,
+    });
+    expect(req.variants![1]).toMatchObject({
+      label: 'Bad ombres',
+      iconHint: 'sad emoji',
+      bgHex: '#E1251B',
+      colorMatched: true,
+    });
+  });
+});
+
+describe('parseTagVariants helpers', () => {
+  it('splits conjoined specs on "and"', () => {
+    expect(splitConjoinedSpecs('green for good and red for bad')).toEqual([
+      'green for good',
+      'red for bad',
+    ]);
+  });
+
+  it('extracts qualifier segments from icon hints', () => {
+    expect(parseSpecSegment('smiling emoji for the good tag')).toEqual({
+      value: 'smiling emoji',
+      qualifier: 'good',
+    });
   });
 });

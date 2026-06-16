@@ -1,5 +1,17 @@
 import { extractColor } from './colors.js';
 
+/** Per-tag spec when a ticket requests multiple distinct icons/tags. */
+export interface TagVariant {
+  /** Human label for comments and filenames (e.g. "Good ombres"). */
+  label: string;
+  /** Icon/visual brief for this tag only. */
+  iconHint?: string;
+  /** Background color for this tag. */
+  bgHex: string;
+  /** True when the color was explicitly stated for this tag. */
+  colorMatched: boolean;
+}
+
 /** Normalized representation of a custom user tag request from a Jira issue. */
 export interface TagRequest {
   issueKey: string;
@@ -15,6 +27,8 @@ export interface TagRequest {
   description: string;
   /** Requested icon / visual hint from the ticket (e.g. "Lululemon logo"). */
   iconHint?: string;
+  /** When count > 1, per-tag icon/color specs parsed from the form fields. */
+  variants?: TagVariant[];
   dueDate?: string;
 }
 
@@ -69,10 +83,194 @@ function fieldString(fields: Record<string, unknown>, id?: string): string {
 }
 
 function extractCount(text: string): number {
-  const m = text.match(/(?:number\s+of\s+tags|tags?|quantity|qty|count)\D{0,12}?(\d+)/i);
+  const m = text.match(
+    /(?:number\s+of\s+(?:tags?|icons?)|total\s+(?:#?\s*of\s+)?(?:tags?|icons?)|tags?|icons?|quantity|qty|count)\D{0,12}?(\d+)/i,
+  );
   const n = m ? Number(m[1]) : NaN;
   if (Number.isFinite(n) && n >= 1 && n <= 4) return n;
   return 1;
+}
+
+function parseCountField(value: string): number | null {
+  const direct = Number(value);
+  if (Number.isFinite(direct) && direct >= 1 && direct <= 4) return direct;
+  return extractCount(`count ${value}`);
+}
+
+interface SpecSegment {
+  value: string;
+  qualifier?: string;
+}
+
+interface ColorSpecSegment extends SpecSegment {
+  hex: string;
+  matched: boolean;
+}
+
+/** Split "A and B" style form values into separate specs. */
+export function splitConjoinedSpecs(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed
+    .split(/\band\b/i)
+    .map((segment) => segment.trim().replace(/^[,;]\s*/, '').replace(/[,;]$/, ''))
+    .filter(Boolean);
+}
+
+/** Parse "smiling emoji for the good tag" into value + optional qualifier. */
+export function parseSpecSegment(segment: string): SpecSegment {
+  const forTag = segment.match(/^(.+?)\s+for\s+(?:the\s+)?(.+?)(?:\s+tag)?\.?$/i);
+  if (forTag) {
+    return { value: forTag[1].trim(), qualifier: forTag[2].trim().toLowerCase() };
+  }
+  return { value: segment.trim() };
+}
+
+function capitalizeWord(text: string): string {
+  if (!text) return text;
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function variantLabelFrom(
+  qualifier: string | undefined,
+  tagName: string,
+  index: number,
+  count: number,
+): string {
+  if (qualifier) {
+    const parts = splitConjoinedSpecs(tagName);
+    if (parts.length === 2) {
+      const left = parts[0].trim();
+      const rightWords = parts[1].trim().split(/\s+/);
+      const rightHead = rightWords[0] ?? '';
+      const sharedSuffix = rightWords.slice(1).join(' ');
+
+      if (left.toLowerCase().includes(qualifier) || qualifier.includes(left.toLowerCase())) {
+        return capitalizeWord(sharedSuffix ? `${left} ${sharedSuffix}` : left);
+      }
+      if (
+        rightHead.toLowerCase().includes(qualifier) ||
+        qualifier.includes(rightHead.toLowerCase())
+      ) {
+        return capitalizeWord(sharedSuffix ? `${rightHead} ${sharedSuffix}` : parts[1].trim());
+      }
+    }
+
+    if (parts.length >= count) {
+      const match = parts.find(
+        (part) =>
+          part.toLowerCase().includes(qualifier) ||
+          qualifier.includes(part.toLowerCase().split(/\s+/)[0] ?? ''),
+      );
+      if (match) return capitalizeWord(match.trim());
+    }
+
+    const base = tagName
+      .replace(new RegExp(`\\b(and\\s+)?${qualifier}\\b`, 'gi'), '')
+      .replace(/\band\b/gi, '')
+      .trim();
+    if (base) return `${capitalizeWord(qualifier)} ${base}`.replace(/\s+/g, ' ').trim();
+    return capitalizeWord(qualifier);
+  }
+  return count > 1 ? `${tagName} (${index + 1})` : tagName;
+}
+
+function resolveSpecSegment<T extends SpecSegment>(
+  parts: T[],
+  index: number,
+  qualifier?: string,
+): T | undefined {
+  if (qualifier) {
+    const byQualifier = parts.find(
+      (part) =>
+        part.qualifier &&
+        (part.qualifier === qualifier ||
+          part.qualifier.includes(qualifier) ||
+          qualifier.includes(part.qualifier)),
+    );
+    if (byQualifier) return byQualifier;
+  }
+  if (parts[index]) return parts[index];
+  if (parts.length === 1) return parts[0];
+  return undefined;
+}
+
+/**
+ * When count > 1, parse paired icon/color specs from the form fields.
+ * Returns undefined when the fields describe a single shared spec (use design
+ * variations instead).
+ */
+export function parseTagVariants(
+  count: number,
+  tagName: string,
+  colorField: string,
+  iconField: string,
+  fallbackHex: string,
+  fallbackColorMatched: boolean,
+): TagVariant[] | undefined {
+  if (count <= 1) return undefined;
+
+  const iconParts = iconField ? splitConjoinedSpecs(iconField).map(parseSpecSegment) : [];
+  const colorParts: ColorSpecSegment[] = colorField
+    ? splitConjoinedSpecs(colorField).map((segment) => {
+        const { value, qualifier } = parseSpecSegment(segment);
+        const color = extractColor(value);
+        return { value, qualifier, hex: color.hex, matched: color.matched };
+      })
+    : [];
+
+  const multiIcon = iconParts.length > 1;
+  const multiColor = colorParts.length > 1;
+  if (!multiIcon && !multiColor) return undefined;
+
+  const slots: {
+    qualifier?: string;
+    iconHint?: string;
+    bgHex: string;
+    colorMatched: boolean;
+  }[] = [];
+
+  if (iconParts.length >= count) {
+    for (let i = 0; i < count; i++) {
+      const icon = iconParts[i] ?? iconParts[0];
+      const color = resolveSpecSegment(colorParts, i, icon.qualifier);
+      slots.push({
+        qualifier: icon.qualifier,
+        iconHint: icon.value,
+        bgHex: color?.hex ?? fallbackHex,
+        colorMatched: color?.matched ?? fallbackColorMatched,
+      });
+    }
+  } else if (colorParts.length >= count) {
+    for (let i = 0; i < count; i++) {
+      const color = colorParts[i] ?? colorParts[0];
+      const icon = resolveSpecSegment(iconParts, i, color.qualifier);
+      slots.push({
+        qualifier: color.qualifier ?? icon?.qualifier,
+        iconHint: icon?.value,
+        bgHex: color.hex,
+        colorMatched: color.matched,
+      });
+    }
+  } else {
+    for (let i = 0; i < count; i++) {
+      const icon = iconParts[i];
+      const color = colorParts[i];
+      slots.push({
+        qualifier: icon?.qualifier ?? color?.qualifier,
+        iconHint: icon?.value,
+        bgHex: color?.hex ?? fallbackHex,
+        colorMatched: color?.matched ?? fallbackColorMatched,
+      });
+    }
+  }
+
+  return slots.map((slot, index) => ({
+    label: variantLabelFrom(slot.qualifier, tagName, index, count),
+    iconHint: slot.iconHint,
+    bgHex: slot.bgHex,
+    colorMatched: slot.colorMatched,
+  }));
 }
 
 /**
@@ -100,11 +298,17 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
     ? extractColor(colorField)
     : extractColor(searchText);
 
-  const count = countField
-    ? extractCount(`count ${countField}`)
-    : extractCount(searchText);
+  const count = countField ? parseCountField(countField) ?? extractCount(searchText) : extractCount(searchText);
 
   const tagName = (tagNameField || summary || 'Custom Tag').trim();
+  const variants = parseTagVariants(
+    count,
+    tagName,
+    colorField,
+    iconField,
+    color.hex,
+    color.matched,
+  );
 
   return {
     issueKey: issue.key,
@@ -114,6 +318,7 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
     count,
     description,
     iconHint: iconField || undefined,
+    variants,
     dueDate: typeof fields.duedate === 'string' ? fields.duedate : undefined,
   };
 }

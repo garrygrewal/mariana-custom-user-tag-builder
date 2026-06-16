@@ -136,4 +136,71 @@ describe('classify', () => {
     );
     expect(c.iconId).not.toBe('dumbbell');
   });
+
+  it('matches UTR-87 good variant to Nucleo face-smile from smiling emoji hint', () => {
+    const c = classify(
+      req({
+        tagName: 'Good ombres',
+        iconHint: 'smiling emoji',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toBe('nucleo-face-smile');
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('matches UTR-87 bad variant to Nucleo face-sad from sad emoji hint', () => {
+    const c = classify(
+      req({
+        tagName: 'Bad ombres',
+        iconHint: 'sad emoji',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toBe('nucleo-face-sad');
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('routes thumbs up and thumbs down to distinct Nucleo icons', () => {
+    const up = classify(req({ tagName: 'Like', iconHint: 'thumbs up' }), registry);
+    const down = classify(req({ tagName: 'Dislike', iconHint: 'thumbs down' }), registry);
+    expect(up.iconId).toBe('nucleo-thumbs-up');
+    expect(down.iconId).toBe('nucleo-thumbs-down');
+  });
+
+  it('matches common studio hints to Nucleo via synonyms', () => {
+    const cases: Array<[string, string, string]> = [
+      ['VIP Member', 'vip', 'nucleo-crown'],
+      ['Pilates', 'pilates', 'nucleo-mat'],
+      ['Kickboxing', 'kickboxing', 'nucleo-punching-bag'],
+      ['Dog Friendly', 'dog', 'nucleo-dog'],
+      ['Valentine', 'valentine', 'nucleo-heart'],
+      ['New Member', 'new member', 'nucleo-user-plus'],
+      ['Invite Bonus', 'invite', 'nucleo-users-shaking-hands'],
+      ['Promo', 'promo', 'nucleo-discount-2'],
+    ];
+    for (const [tagName, hint, iconId] of cases) {
+      const c = classify(req({ tagName, iconHint: hint }), registry);
+      expect(c.iconId, hint).toBe(iconId);
+      expect(c.isComplex, hint).toBe(false);
+    }
+  });
+
+  it('does not route (TEST) tag names to pregnancy-test via the word test', () => {
+    const c = classify(
+      req({
+        tagName: '(TEST) Sample Tag',
+        iconHint: 'Earth or globe',
+      }),
+      registry,
+    );
+    expect(c.iconId).not.toBe('nucleo-pregnancy-test');
+    expect(c.iconId).toMatch(/^nucleo-(earth|globe)/);
+  });
 });

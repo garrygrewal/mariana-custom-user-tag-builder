@@ -82,6 +82,12 @@ The UTR "Asset" request form writes to dedicated custom fields, mapped via env:
 | Total # of Tags | `JIRA_FIELD_COUNT` | `customfield_10416` |
 | Tag Icon (hint) | `JIRA_FIELD_ICON` | `customfield_10309` |
 
+When **Total # of Tags** is greater than 1 and the Tag Icon / Tag Color fields
+describe separate specs (e.g. "green for good and red for bad" with "smiling
+emoji for the good tag, and sad emoji for the bad tag"), the generator produces
+one distinct tag per spec — each with its own icon brief and background color —
+instead of multiple design variations of the same tag.
+
 `JIRA_FIELD_DESCRIPTION` is left unset, so the native description field supplies
 the free-text brief. When a field id is unset, the generator falls back to
 parsing the tag name from the summary and the color/count from the description

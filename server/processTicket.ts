@@ -26,6 +26,18 @@ interface ReviewOption {
 }
 
 function optionLabel(artifact: GeneratedArtifact, index: number, total: number): string {
+  if (artifact.label) {
+    switch (artifact.source) {
+      case 'library':
+        return `${artifact.label} (library)`;
+      case 'ai':
+        return `${artifact.label} (AI-generated)`;
+      default: {
+        const _exhaustive: never = artifact.source;
+        return _exhaustive;
+      }
+    }
+  }
   if (total === 1) {
     return artifact.source === 'ai' ? 'AI-generated option' : 'Library option';
   }
