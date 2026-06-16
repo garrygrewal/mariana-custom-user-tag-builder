@@ -67,5 +67,43 @@ describe('classify', () => {
       registry,
     );
     expect(c.isComplex).toBe(true);
+    expect(c.confidence).toBe('high');
+  });
+
+  it('assigns low confidence for UTR-85-shaped angel/halo hint matching person', () => {
+    const c = classify(
+      req({
+        tagName: 'Angel Week Finisher',
+        description: 'Tag for clients who completed Angel Week.',
+        iconHint: 'an angel or a person with a halo',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toBe('person');
+    expect(c.confidence).toBe('low');
+    expect(c.fallbackToAi).toBe(true);
+    expect(c.unmatchedTerms).toEqual(expect.arrayContaining(['angel', 'halo']));
+  });
+
+  it('keeps high confidence for a curated synonym match (vaccinated)', () => {
+    const c = classify(
+      req({
+        tagName: 'Vaccinated Member',
+        description: 'show vaccinated status for this client',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.iconId).toBe('vaccinated');
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('keeps high confidence for a clear initialism (VIP)', () => {
+    const c = classify(req({ tagName: 'VIP' }), registry);
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
   });
 });

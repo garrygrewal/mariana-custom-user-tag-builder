@@ -161,6 +161,35 @@ describe('processTicket', () => {
     expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
 
+  it('posts one comment with library and AI options when confidence is low', async () => {
+    const client = new FakeJiraClient(
+      issueWith(
+        'Angel Week Finisher',
+        'Tag for clients who completed Angel Week. Icon: an angel or a person with a halo. Color #7B2FF7',
+      ),
+    );
+
+    const result = await processTicket('UTR-100', { config, client });
+
+    expect(result.isComplex).toBe(false);
+    expect(result.mode).toBe('icon');
+    expect(result.artifactCount).toBe(2);
+    expect(client.attachments).toHaveLength(6);
+
+    const svgNames = client.attachments
+      .filter((a) => a.mime === 'image/svg+xml')
+      .map((a) => a.fileName);
+    expect(svgNames.some((n) => n.includes('_ai_'))).toBe(true);
+    expect(svgNames.some((n) => !n.includes('_ai_'))).toBe(true);
+
+    expect(client.comments).toHaveLength(1);
+    const text = commentText(client.comments[0]);
+    expect(text).toContain('DESIGN REVIEW NEEDED');
+    expect(text).toContain('Option A (library)');
+    expect(text).toContain('Option B (AI-generated)');
+    expect(embeddedFileCount(client.comments[0])).toBe(4);
+  });
+
   it('moves the ticket to In Progress after posting the design-review comment', async () => {
     const client = new FakeJiraClient(issueWith('VIP', 'show the letters VIP, color gold'));
     client.availableTransitions = [

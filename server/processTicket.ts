@@ -7,7 +7,7 @@ import {
   type JiraTransition,
 } from './jira.js';
 import { parseTicket } from './ticket.js';
-import { generateTag } from './tagGenerator.js';
+import { generateTag, type GeneratedArtifact } from './tagGenerator.js';
 import { buildArtifactZip } from './artifactZip.js';
 
 const REVIEW_TEXT =
@@ -19,6 +19,28 @@ const PREVIEW_PX = 96;
 type CommentEmbed =
   | { kind: 'preview'; mediaId: string }
   | { kind: 'zip'; mediaId: string };
+
+interface ReviewOption {
+  label: string;
+  embeds: CommentEmbed[];
+}
+
+function optionLabel(artifact: GeneratedArtifact, index: number, total: number): string {
+  if (total === 1) {
+    return artifact.source === 'ai' ? 'AI-generated option' : 'Library option';
+  }
+  const letter = String.fromCharCode(65 + index);
+  switch (artifact.source) {
+    case 'library':
+      return `Option ${letter} (library)`;
+    case 'ai':
+      return `Option ${letter} (AI-generated)`;
+    default: {
+      const _exhaustive: never = artifact.source;
+      return _exhaustive;
+    }
+  }
+}
 
 export interface ProcessResult {
   issueKey: string;
@@ -35,9 +57,9 @@ export interface ProcessDeps {
 
 /**
  * Build the design-review comment: a single line that @mentions the reviewer,
- * followed by inline SVG preview(s) and downloadable ZIP bundle(s).
+ * followed by labeled inline SVG preview(s) and downloadable ZIP bundle(s).
  */
-function buildReviewComment(config: JiraConfig, embeds: CommentEmbed[]): AdfDoc {
+function buildReviewComment(config: JiraConfig, options: ReviewOption[]): AdfDoc {
   const paragraph: { type: 'paragraph'; content: unknown[] } = {
     type: 'paragraph',
     content: [],
@@ -52,37 +74,47 @@ function buildReviewComment(config: JiraConfig, embeds: CommentEmbed[]): AdfDoc 
     paragraph.content.push({ type: 'text', text: REVIEW_TEXT.trimStart() });
   }
 
-  const media = embeds.map((embed) => {
-    if (embed.kind === 'preview') {
-      return {
-        type: 'mediaSingle',
-        attrs: { layout: 'center', width: PREVIEW_PX, widthType: 'pixel' },
+  const content: unknown[] = [paragraph];
+
+  for (const option of options) {
+    content.push({
+      type: 'paragraph',
+      content: [{ type: 'text', text: option.label, marks: [{ type: 'strong' }] }],
+    });
+
+    for (const embed of option.embeds) {
+      if (embed.kind === 'preview') {
+        content.push({
+          type: 'mediaSingle',
+          attrs: { layout: 'center', width: PREVIEW_PX, widthType: 'pixel' },
+          content: [
+            {
+              type: 'media',
+              attrs: {
+                type: 'file',
+                id: embed.mediaId,
+                collection: '',
+                width: PREVIEW_PX,
+                height: PREVIEW_PX,
+              },
+            },
+          ],
+        });
+        continue;
+      }
+      content.push({
+        type: 'mediaGroup',
         content: [
           {
             type: 'media',
-            attrs: {
-              type: 'file',
-              id: embed.mediaId,
-              collection: '',
-              width: PREVIEW_PX,
-              height: PREVIEW_PX,
-            },
+            attrs: { type: 'file', id: embed.mediaId, collection: '' },
           },
         ],
-      };
+      });
     }
-    return {
-      type: 'mediaGroup',
-      content: [
-        {
-          type: 'media',
-          attrs: { type: 'file', id: embed.mediaId, collection: '' },
-        },
-      ],
-    };
-  });
+  }
 
-  return { type: 'doc', version: 1, content: [paragraph, ...media] };
+  return { type: 'doc', version: 1, content };
 }
 
 /** Move the ticket to the configured design-review column (default: In Progress). */
@@ -143,10 +175,10 @@ export async function processTicket(
     const result = await generateTag(req);
 
     const attachments: string[] = [];
-    const commentEmbeds: CommentEmbed[] = [];
-    for (const artifact of result.artifacts) {
-      // Embed the SVG inline (vector — stays crisp at small sizes); keep the
-      // PNG as a ticket attachment for quick download/preview.
+    const reviewOptions: ReviewOption[] = [];
+    for (let i = 0; i < result.artifacts.length; i++) {
+      const artifact = result.artifacts[i];
+      const commentEmbeds: CommentEmbed[] = [];
       const svgRef = await client.addAttachment(
         issueKey,
         artifact.svgFileName,
@@ -173,10 +205,14 @@ export async function processTicket(
       );
       commentEmbeds.push({ kind: 'preview', mediaId: svgRef.mediaId });
       commentEmbeds.push({ kind: 'zip', mediaId: zipRef.mediaId });
+      reviewOptions.push({
+        label: optionLabel(artifact, i, result.artifacts.length),
+        embeds: commentEmbeds,
+      });
       attachments.push(artifact.svgFileName, artifact.pngFileName, artifact.zipFileName);
     }
 
-    await client.addComment(issueKey, buildReviewComment(config, commentEmbeds));
+    await client.addComment(issueKey, buildReviewComment(config, reviewOptions));
 
     try {
       await transitionForDesignReview(issueKey, config, client);

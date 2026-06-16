@@ -2,6 +2,8 @@ import type { IconDef } from '../src/types.js';
 import { TEXT_MAX_LENGTH } from '../src/constants.js';
 import type { TagRequest } from './ticket.js';
 
+export type Confidence = 'high' | 'low';
+
 export interface Classification {
   /** When true, route to the LLM SVG author; otherwise to the builder. */
   isComplex: boolean;
@@ -12,6 +14,14 @@ export interface Classification {
   /** Matched library icon id for icon mode. */
   iconId?: string;
   iconLabel?: string;
+  /** Routing confidence for simple (non-complex) paths. */
+  confidence: Confidence;
+  /** When true, also generate one AI option alongside the library/text artifact. */
+  fallbackToAi?: boolean;
+  /** Tokens that contributed to the library icon match. */
+  matchedTerms?: string[];
+  /** Salient tokens from the brief that did not support the match. */
+  unmatchedTerms?: string[];
   /** Short human-readable explanation of the routing decision. */
   reason: string;
 }
@@ -67,7 +77,62 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   'friends-family': ['friends', 'family', 'household'],
 };
 
+/** Library icons that are weak defaults when matched without strong intent. */
+const GENERIC_ICON_IDS = new Set(['person', 'star', 'note']);
+
 const LETTERS_INTENT = /\b(letters?|initials?|text|abbreviation|monogram|acronym)\b/i;
+
+const STOP_WORDS = new Set([
+  'the',
+  'for',
+  'and',
+  'with',
+  'our',
+  'tag',
+  'show',
+  'display',
+  'using',
+  'color',
+  'tags',
+  'user',
+  'custom',
+  'please',
+  'design',
+  'need',
+  'needs',
+  'want',
+  'requested',
+  'a',
+  'an',
+  'or',
+  'to',
+  'of',
+  'in',
+  'on',
+  'is',
+  'it',
+  'this',
+  'that',
+  'be',
+  'has',
+  'have',
+]);
+
+/** Tag-name filler that should not alone trigger a semantic-gap signal. */
+const TAG_FILLER = new Set([
+  'member',
+  'members',
+  'customer',
+  'client',
+  'week',
+  'finisher',
+  'program',
+  'club',
+  'badge',
+]);
+
+const LOW_MATCH_SCORE = 35;
+const CLOSE_SCORE_MARGIN = 12;
 
 function normalizeTextToken(token: string): string | null {
   const cleaned = token.toUpperCase().replace(/[^A-Z0-9.]/g, '');
@@ -99,50 +164,188 @@ function keywordsForIcon(icon: IconDef): IconKeywords {
   return { curated: Array.from(new Set(curated)), generic: Array.from(new Set(generic)) };
 }
 
-interface IconMatch {
+function allIconKeywords(icon: IconDef): Set<string> {
+  const { curated, generic } = keywordsForIcon(icon);
+  return new Set([...curated, ...generic, ...icon.id.split('-')]);
+}
+
+export interface IconMatch {
   icon: IconDef;
   score: number;
   matched: number;
+  matchedTerms: string[];
+  curatedHit: boolean;
+  longest: number;
 }
 
-function matchIcon(text: string, registry: IconDef[]): IconMatch | null {
+function rankIconMatches(text: string, registry: IconDef[]): IconMatch[] {
   const tokens = tokenize(text);
 
-  // Strong special case: discount tags like "10% off" -> "10-off".
   const discount = text.match(/(\d{1,3})\s*%?\s*off\b/i);
   if (discount) {
     const id = `${discount[1]}-off`;
     const icon = registry.find((i) => i.id === id);
-    if (icon) return { icon, score: 100, matched: 2 };
+    if (icon) {
+      return [
+        {
+          icon,
+          score: 100,
+          matched: 2,
+          matchedTerms: [discount[1], 'off'],
+          curatedHit: true,
+          longest: 3,
+        },
+      ];
+    }
   }
 
-  let best: IconMatch | null = null;
+  const matches: IconMatch[] = [];
   for (const icon of registry) {
     const { curated, generic } = keywordsForIcon(icon);
-    let matched = 0;
+    const matchedTerms: string[] = [];
     let longest = 0;
     let curatedHit = false;
     for (const kw of curated) {
       if (tokens.has(kw)) {
-        matched += 1;
+        matchedTerms.push(kw);
         longest = Math.max(longest, kw.length);
         curatedHit = true;
       }
     }
     for (const kw of generic) {
       if (tokens.has(kw)) {
-        matched += 1;
+        matchedTerms.push(kw);
         longest = Math.max(longest, kw.length);
       }
     }
-    if (matched === 0) continue;
-    // Accept on a curated synonym hit, or a sufficiently specific (>=4) token.
+    if (matchedTerms.length === 0) continue;
     if (!curatedHit && longest < 4) continue;
-    const score = longest * 10 + matched + (curatedHit ? 5 : 0);
-    if (!best || score > best.score) best = { icon, score, matched };
+    const score = longest * 10 + matchedTerms.length + (curatedHit ? 5 : 0);
+    matches.push({
+      icon,
+      score,
+      matched: matchedTerms.length,
+      matchedTerms: Array.from(new Set(matchedTerms)),
+      curatedHit,
+      longest,
+    });
   }
 
-  return best;
+  matches.sort((a, b) => b.score - a.score);
+  return matches;
+}
+
+function isSalientToken(token: string): boolean {
+  if (STOP_WORDS.has(token) || TAG_FILLER.has(token)) return false;
+  return token.length >= 4 || /^[a-z]{3,}$/.test(token);
+}
+
+function strongCuratedIntent(match: IconMatch, req: TagRequest): boolean {
+  const intentHay = `${req.tagName}\n${req.description}\n${req.iconHint ?? ''}`.toLowerCase();
+  const curated = new Set(keywordsForIcon(match.icon).curated);
+  return match.matchedTerms.some((term) => curated.has(term) && intentHay.includes(term));
+}
+
+function unmatchedSalientTerms(
+  req: TagRequest,
+  matchedTerms: Set<string>,
+  iconKeywords: Set<string>,
+): string[] {
+  const priorityHay = `${req.tagName} ${req.iconHint ?? ''}`;
+  const tokens = tokenize(priorityHay);
+  return [...tokens].filter(
+    (t) => isSalientToken(t) && !matchedTerms.has(t) && !iconKeywords.has(t),
+  );
+}
+
+function tagNameSemanticGap(
+  tagName: string,
+  matchedTerms: Set<string>,
+  iconKeywords: Set<string>,
+): string[] {
+  const tokens = tokenize(tagName);
+  return [...tokens].filter(
+    (t) => isSalientToken(t) && !matchedTerms.has(t) && !iconKeywords.has(t),
+  );
+}
+
+interface ConfidenceAssessment {
+  confidence: Confidence;
+  fallbackToAi: boolean;
+  matchedTerms?: string[];
+  unmatchedTerms?: string[];
+  reasonSuffix: string;
+}
+
+function assessIconConfidence(
+  req: TagRequest,
+  match: IconMatch,
+  runnerUp: IconMatch | null,
+): ConfidenceAssessment {
+  const matchedTermSet = new Set(match.matchedTerms);
+  const iconKeywords = allIconKeywords(match.icon);
+  const lowSignals: string[] = [];
+
+  if (GENERIC_ICON_IDS.has(match.icon.id) && !strongCuratedIntent(match, req)) {
+    lowSignals.push('generic library icon');
+  }
+  if (!match.curatedHit) {
+    lowSignals.push('generic token hit only');
+  }
+  if (match.score < LOW_MATCH_SCORE) {
+    lowSignals.push('low match score');
+  }
+
+  const unmatched = unmatchedSalientTerms(req, matchedTermSet, iconKeywords);
+  if (unmatched.length > 0) {
+    lowSignals.push(`unmatched salient terms (${unmatched.join(', ')})`);
+  }
+
+  if (runnerUp && match.score - runnerUp.score <= CLOSE_SCORE_MARGIN) {
+    const sharedTerms = match.matchedTerms.filter((t) => runnerUp.matchedTerms.includes(t));
+    if (sharedTerms.length === 0) {
+      lowSignals.push('close competing icon scores');
+    }
+  }
+
+  if (req.iconHint && /\bor\b/i.test(req.iconHint)) {
+    lowSignals.push('disjunction in icon hint');
+  }
+
+  const gap = tagNameSemanticGap(req.tagName, matchedTermSet, iconKeywords);
+  if (gap.length > 0) {
+    lowSignals.push(`semantic gap in tag name (${gap.join(', ')})`);
+  }
+
+  if (lowSignals.length === 0) {
+    return {
+      confidence: 'high',
+      fallbackToAi: false,
+      matchedTerms: match.matchedTerms,
+      reasonSuffix: '',
+    };
+  }
+
+  return {
+    confidence: 'low',
+    fallbackToAi: true,
+    matchedTerms: match.matchedTerms,
+    unmatchedTerms: Array.from(new Set([...unmatched, ...gap])),
+    reasonSuffix: ` Low confidence (${lowSignals.join('; ')}); including AI fallback.`,
+  };
+}
+
+function highTextClassification(
+  text: string,
+  reason: string,
+): Classification {
+  return {
+    isComplex: false,
+    mode: 'text',
+    text,
+    confidence: 'high',
+    reason,
+  };
 }
 
 /**
@@ -153,48 +356,69 @@ function matchIcon(text: string, registry: IconDef[]): IconMatch | null {
 export function classify(req: TagRequest, registry: IconDef[]): Classification {
   const hay = `${req.tagName}\n${req.description}\n${req.iconHint ?? ''}`;
 
-  // 1. Explicitly quoted short token, e.g. tag should say "AB".
   const quoted = hay.match(/["'\u2018\u2019\u201c\u201d]\s*([A-Za-z0-9.]{1,3})\s*["'\u2018\u2019\u201c\u201d]/);
   if (quoted) {
     const text = normalizeTextToken(quoted[1]);
     if (text) {
-      return { isComplex: false, mode: 'text', text, reason: `Quoted short text "${text}".` };
+      return highTextClassification(text, `Quoted short text "${text}".`);
     }
   }
 
-  // 2. Tag name that is already an initialism (all caps / digits, <= 3 chars).
   if (/^[A-Z0-9.]{1,3}$/.test(req.tagName.trim())) {
     const text = normalizeTextToken(req.tagName);
     if (text) {
-      return { isComplex: false, mode: 'text', text, reason: `Tag name is a ${text.length}-char initialism.` };
+      return highTextClassification(
+        text,
+        `Tag name is a ${text.length}-char initialism.`,
+      );
     }
   }
 
-  // 3. Known library icon concept.
-  const iconMatch = matchIcon(hay, registry);
+  const ranked = rankIconMatches(hay, registry);
+  const iconMatch = ranked[0] ?? null;
   if (iconMatch) {
+    const assessment = assessIconConfidence(req, iconMatch, ranked[1] ?? null);
     return {
       isComplex: false,
       mode: 'icon',
       iconId: iconMatch.icon.id,
       iconLabel: iconMatch.icon.label,
-      reason: `Matched library icon "${iconMatch.icon.id}".`,
+      confidence: assessment.confidence,
+      fallbackToAi: assessment.fallbackToAi,
+      matchedTerms: assessment.matchedTerms,
+      unmatchedTerms: assessment.unmatchedTerms,
+      reason: `Matched library icon "${iconMatch.icon.id}".${assessment.reasonSuffix}`,
     };
   }
 
-  // 4. Letters intent with a candidate token in the brief.
   if (LETTERS_INTENT.test(hay)) {
     const tok = req.description.match(/\b([A-Za-z0-9.]{1,3})\b/);
-    const text = tok ? normalizeTextToken(tok[1]) : normalizeTextToken(req.tagName.slice(0, 3));
-    if (text) {
-      return { isComplex: false, mode: 'text', text, reason: `Letters/initials requested ("${text}").` };
+    if (tok) {
+      const text = normalizeTextToken(tok[1]);
+      if (text) {
+        return highTextClassification(
+          text,
+          `Letters/initials requested ("${text}").`,
+        );
+      }
+    }
+    const fuzzy = normalizeTextToken(req.tagName.slice(0, 3));
+    if (fuzzy) {
+      return {
+        isComplex: false,
+        mode: 'text',
+        text: fuzzy,
+        confidence: 'low',
+        fallbackToAi: true,
+        reason: `Letters intent with inferred text "${fuzzy}" (low confidence).`,
+      };
     }
   }
 
-  // 5. Otherwise it needs a custom icon.
   return {
     isComplex: true,
     mode: 'icon',
+    confidence: 'high',
     reason: 'No library icon or short text match — custom icon required.',
   };
 }

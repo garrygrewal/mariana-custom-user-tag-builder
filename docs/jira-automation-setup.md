@@ -57,14 +57,15 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 ## 4. What gets posted
 
 - **Attachments:** `custom-tag_<slug>_<hex>.svg`, `.png`, and `.zip` (one set per
-  option; complex requests may include `Option 1..N`).
+  option; complex requests may include `Option 1..N`). When a library match is
+  low-confidence, a second `_ai` artifact set is also attached.
 - **Comment:** a design-review comment that @mentions the configured reviewer
   (`JIRA_REVIEW_ACCOUNT_ID`), embeds the generated tag SVG(s) inline at a
   reduced size (vector, so they stay crisp), and includes a downloadable ZIP
-  bundle (SVG + PNG) per tag. The only text is: "DESIGN REVIEW NEEDED - Do not
-  upload until approved by design. Please wait for a designer to comment and
-  approve these user tags." It deliberately omits the client-facing comment
-  prefix so nothing is sent to the client automatically.
+  bundle (SVG + PNG) per tag. Low-confidence simple matches label **Option A
+  (library)** and **Option B (AI-generated)** in a single comment. The only
+  leading text is: "DESIGN REVIEW NEEDED - Do not upload until approved by
+  design. Please wait for a designer to comment and approve these user tags."
 - **Status:** after posting the review comment, the ticket is moved to **In
   Progress** on the board (configurable via `JIRA_TRANSITION_STATUS`; set to
   empty to disable, or set `JIRA_TRANSITION_ID` to use a specific transition).

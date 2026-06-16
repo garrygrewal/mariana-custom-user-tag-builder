@@ -11,12 +11,15 @@ import { svgToPng } from './rasterize.node.js';
 import { generateComplexSvgs } from './aiSvg.js';
 import type { TagRequest } from './ticket.js';
 
+export type ArtifactSource = 'library' | 'ai';
+
 export interface GeneratedArtifact {
   svg: string;
   png: Buffer;
   svgFileName: string;
   pngFileName: string;
   zipFileName: string;
+  source: ArtifactSource;
 }
 
 export interface GenerationResult {
@@ -34,9 +37,14 @@ export interface GenerateOptions {
   model?: string;
 }
 
-function fileNames(slug: string, hex: string, optionIndex?: number) {
-  const suffix = optionIndex != null ? `_opt${optionIndex + 1}` : '';
-  const base = `custom-tag_${slug}${suffix}_${hex.replace(/^#/, '').toLowerCase()}`;
+function fileNames(
+  slug: string,
+  hex: string,
+  options?: { optionIndex?: number; ai?: boolean },
+) {
+  const suffix = options?.optionIndex != null ? `_opt${options.optionIndex + 1}` : '';
+  const aiSuffix = options?.ai ? '_ai' : '';
+  const base = `custom-tag_${slug}${suffix}${aiSuffix}_${hex.replace(/^#/, '').toLowerCase()}`;
   return {
     svgFileName: `${base}.svg`,
     pngFileName: `${base}.png`,
@@ -90,20 +98,50 @@ export async function generateTag(
   if (!classification.isComplex) {
     const svg = buildSimpleSvg(req, classification, fgHex);
     const names = fileNames(slug, bgHex);
+    const artifacts: GeneratedArtifact[] = [
+      {
+        svg,
+        png: svgToPng(svg),
+        svgFileName: names.svgFileName,
+        pngFileName: names.pngFileName,
+        zipFileName: names.zipFileName,
+        source: 'library',
+      },
+    ];
+
+    if (classification.confidence === 'low' && classification.fallbackToAi) {
+      const ai = await generateComplexSvgs(req, bgHex, fgHex, {
+        optionCount: 1,
+        model: options.model,
+      });
+      const aiSvg = ai.svgs[0];
+      if (aiSvg) {
+        const aiNames = fileNames(slug, bgHex, { ai: true });
+        artifacts.push({
+          svg: aiSvg,
+          png: svgToPng(aiSvg),
+          svgFileName: aiNames.svgFileName,
+          pngFileName: aiNames.pngFileName,
+          zipFileName: aiNames.zipFileName,
+          source: 'ai',
+        });
+      }
+      return {
+        classification,
+        bgHex,
+        fgHex,
+        warnings: ai.warnings,
+        aiModel: ai.model,
+        artifacts,
+      };
+    }
+
     return {
       classification,
       bgHex,
       fgHex,
       warnings: [],
-      artifacts: [
-        {
-          svg,
-          png: svgToPng(svg),
-          svgFileName: names.svgFileName,
-          pngFileName: names.pngFileName,
-          zipFileName: names.zipFileName,
-        },
-      ],
+      artifacts,
     };
   }
 
@@ -118,13 +156,14 @@ export async function generateTag(
 
   const multi = ai.svgs.length > 1;
   const artifacts: GeneratedArtifact[] = ai.svgs.map((svg, i) => {
-    const names = fileNames(slug, bgHex, multi ? i : undefined);
+    const names = fileNames(slug, bgHex, { optionIndex: multi ? i : undefined });
     return {
       svg,
       png: svgToPng(svg),
       svgFileName: names.svgFileName,
       pngFileName: names.pngFileName,
       zipFileName: names.zipFileName,
+      source: 'ai' as const,
     };
   });
 
