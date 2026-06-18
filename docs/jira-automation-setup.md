@@ -59,16 +59,19 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 - **Attachments:** `custom-tag_<slug>_<hex>.svg`, `.png`, and `.zip` (one set per
   option; complex requests may include `Option 1..N`). When a library match is
   low-confidence, a second `_ai` artifact set is also attached.
-- **Comment:** a design-review comment that @mentions the configured reviewer
-  (`JIRA_REVIEW_ACCOUNT_ID`), embeds the generated tag SVG(s) inline at a
+- **Comment:** a design-review comment that @mentions the configured reviewer(s)
+  (`JIRA_REVIEW_ACCOUNT_ID` plus optional `JIRA_ADDITIONAL_REVIEW_MENTIONS`),
+  embeds the generated tag SVG(s) inline at a
   reduced size (vector, so they stay crisp), and includes a downloadable ZIP
   bundle (SVG + PNG) per tag. Low-confidence simple matches label **Option A
   (library)** and **Option B (AI-generated)** in a single comment. The only
   leading text is: "DESIGN REVIEW NEEDED - Do not upload until approved by
   design. Please wait for a designer to comment and approve these user tags."
-- **Status:** after posting the review comment, the ticket is moved to **In
-  Progress/Review** on the board (configurable via `JIRA_TRANSITION_STATUS`; set to
-  empty to disable, or set `JIRA_TRANSITION_ID` to use a specific transition).
+- **Status:** after posting the review comment, the ticket is assigned to the
+  configured reviewer (`JIRA_REVIEW_ACCOUNT_ID`, or `JIRA_ASSIGNEE_ACCOUNT_ID`
+  when set) and moved to **In Progress/Review** on the board (configurable via
+  `JIRA_TRANSITION_STATUS`; set to empty to disable, or set `JIRA_TRANSITION_ID`
+  to use a specific transition).
 - **On failure:** a comment explaining the error so a designer can take over.
 
 ## 5. Field mapping notes

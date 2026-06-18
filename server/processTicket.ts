@@ -76,11 +76,17 @@ function buildReviewComment(config: JiraConfig, options: ReviewOption[]): AdfDoc
     type: 'paragraph',
     content: [],
   };
-  if (config.reviewAccountId) {
-    paragraph.content.push({
-      type: 'mention',
-      attrs: { id: config.reviewAccountId, text: config.reviewMentionText ?? '@reviewer' },
-    });
+  if (config.reviewMentions?.length) {
+    for (let i = 0; i < config.reviewMentions.length; i++) {
+      if (i > 0) {
+        paragraph.content.push({ type: 'text', text: ' ' });
+      }
+      const mention = config.reviewMentions[i];
+      paragraph.content.push({
+        type: 'mention',
+        attrs: { id: mention.accountId, text: mention.text },
+      });
+    }
     paragraph.content.push({ type: 'text', text: REVIEW_TEXT });
   } else {
     paragraph.content.push({ type: 'text', text: REVIEW_TEXT.trimStart() });
@@ -127,6 +133,16 @@ function buildReviewComment(config: JiraConfig, options: ReviewOption[]): AdfDoc
   }
 
   return { type: 'doc', version: 1, content };
+}
+
+/** Assign the ticket to the configured reviewer when set. */
+async function assignForDesignReview(
+  issueKey: string,
+  config: JiraConfig,
+  client: JiraClientLike,
+): Promise<void> {
+  if (!config.assigneeAccountId) return;
+  await client.assignIssue(issueKey, config.assigneeAccountId);
 }
 
 /** Move the ticket to the configured design-review column (default: In Progress/Review). */
@@ -225,6 +241,12 @@ export async function processTicket(
     }
 
     await client.addComment(issueKey, buildReviewComment(config, reviewOptions));
+
+    try {
+      await assignForDesignReview(issueKey, config, client);
+    } catch (assignError) {
+      console.error(`Design-review assignment failed for ${issueKey}:`, assignError);
+    }
 
     try {
       await transitionForDesignReview(issueKey, config, client);

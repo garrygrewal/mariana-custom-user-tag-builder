@@ -36,6 +36,7 @@ export interface JiraClientLike {
   addComment(key: string, body: AdfDoc): Promise<void>;
   getTransitions(key: string): Promise<JiraTransition[]>;
   transition(key: string, transitionId: string): Promise<void>;
+  assignIssue(key: string, accountId: string): Promise<void>;
 }
 
 export class JiraClient implements JiraClientLike {
@@ -158,6 +159,14 @@ export class JiraClient implements JiraClientLike {
     await this.request(`/rest/api/3/issue/${key}/transitions`, {
       method: 'POST',
       body: JSON.stringify({ transition: { id: transitionId } }),
+    });
+  }
+
+  /** Assign an issue to a user by Atlassian accountId. */
+  async assignIssue(key: string, accountId: string): Promise<void> {
+    await this.request(`/rest/api/3/issue/${key}/assignee`, {
+      method: 'PUT',
+      body: JSON.stringify({ accountId }),
     });
   }
 }

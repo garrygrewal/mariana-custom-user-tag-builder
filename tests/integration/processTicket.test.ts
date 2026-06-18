@@ -34,6 +34,7 @@ class FakeJiraClient implements JiraClientLike {
   attachments: CapturedAttachment[] = [];
   comments: AdfDoc[] = [];
   transitions: string[] = [];
+  assignedTo: string[] = [];
   availableTransitions: JiraTransition[] = [];
 
   constructor(private readonly issue: JiraIssue) {}
@@ -59,6 +60,9 @@ class FakeJiraClient implements JiraClientLike {
   async transition(_key: string, transitionId: string): Promise<void> {
     this.transitions.push(transitionId);
   }
+  async assignIssue(_key: string, accountId: string): Promise<void> {
+    this.assignedTo.push(accountId);
+  }
 }
 
 const config: JiraConfig = {
@@ -67,8 +71,11 @@ const config: JiraConfig = {
   apiToken: 'token',
   fieldMap: {},
   transitionStatus: undefined,
-  reviewAccountId: 'acct-123',
-  reviewMentionText: '@Reviewer',
+  reviewMentions: [
+    { accountId: 'acct-123', text: '@Reviewer' },
+    { accountId: 'acct-456', text: '@Designer Two' },
+  ],
+  assigneeAccountId: 'acct-123',
 };
 
 /** Count embedded file nodes (previews + zip bundles) in a comment doc. */
@@ -125,6 +132,7 @@ describe('processTicket', () => {
     expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
     expect(mentions(client.comments[0], 'acct-123')).toBe(true);
+    expect(mentions(client.comments[0], 'acct-456')).toBe(true);
     // One inline SVG preview and one ZIP download per artifact.
     expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
@@ -214,6 +222,7 @@ describe('processTicket', () => {
     await processTicket('UTR-100', { config: reviewConfig, client });
 
     expect(client.transitions).toEqual(['11']);
+    expect(client.assignedTo).toEqual(['acct-123']);
   });
 
   it('handles UTR-87 as two distinct tags with per-tag labels', async () => {
@@ -316,6 +325,7 @@ describe('processTicket', () => {
       addAttachment: client.addAttachment.bind(client),
       getTransitions: client.getTransitions.bind(client),
       transition: client.transition.bind(client),
+      assignIssue: client.assignIssue.bind(client),
     };
 
     await expect(processTicket('UTR-101', { config, client: failing })).rejects.toThrow(

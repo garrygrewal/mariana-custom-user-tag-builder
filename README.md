@@ -93,8 +93,8 @@ when a UTR ticket is created. For each ticket it:
    an internal **design-review comment** that @mentions the reviewer, embeds the
    tag preview inline, and includes the ZIP for download. It never contains the
    client-facing prefix, so nothing is sent to a client automatically — a
-   designer reviews and forwards the approved tag. The ticket is then moved to
-   **In Progress/Review** on the Jira board.
+   designer reviews and forwards the approved tag. The ticket is then assigned
+   to the configured reviewer and moved to **In Progress/Review** on the Jira board.
 
 Notes:
 
