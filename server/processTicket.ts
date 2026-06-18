@@ -129,7 +129,7 @@ function buildReviewComment(config: JiraConfig, options: ReviewOption[]): AdfDoc
   return { type: 'doc', version: 1, content };
 }
 
-/** Move the ticket to the configured design-review column (default: In Progress). */
+/** Move the ticket to the configured design-review column (default: In Progress/Review). */
 async function transitionForDesignReview(
   issueKey: string,
   config: JiraConfig,

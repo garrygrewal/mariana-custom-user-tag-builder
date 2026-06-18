@@ -94,7 +94,7 @@ when a UTR ticket is created. For each ticket it:
    tag preview inline, and includes the ZIP for download. It never contains the
    client-facing prefix, so nothing is sent to a client automatically — a
    designer reviews and forwards the approved tag. The ticket is then moved to
-   **In Progress** on the Jira board.
+   **In Progress/Review** on the Jira board.
 
 Notes:
 

@@ -67,7 +67,7 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
   leading text is: "DESIGN REVIEW NEEDED - Do not upload until approved by
   design. Please wait for a designer to comment and approve these user tags."
 - **Status:** after posting the review comment, the ticket is moved to **In
-  Progress** on the board (configurable via `JIRA_TRANSITION_STATUS`; set to
+  Progress/Review** on the board (configurable via `JIRA_TRANSITION_STATUS`; set to
   empty to disable, or set `JIRA_TRANSITION_ID` to use a specific transition).
 - **On failure:** a comment explaining the error so a designer can take over.
 

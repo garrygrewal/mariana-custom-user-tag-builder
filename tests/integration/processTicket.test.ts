@@ -199,16 +199,16 @@ describe('processTicket', () => {
     expect(embeddedFileCount(client.comments[0])).toBe(4);
   });
 
-  it('moves the ticket to In Progress after posting the design-review comment', async () => {
+  it('moves the ticket to In Progress/Review after posting the design-review comment', async () => {
     const client = new FakeJiraClient(issueWith('VIP', 'show the letters VIP, color gold'));
     client.availableTransitions = [
-      { id: '11', name: 'Start Progress', to: { name: 'In Progress' } },
+      { id: '11', name: 'Start Progress', to: { name: 'In Progress/Review' } },
       { id: '21', name: 'Done', to: { name: 'Done' } },
     ];
 
     const reviewConfig: JiraConfig = {
       ...config,
-      transitionStatus: 'In Progress',
+      transitionStatus: 'In Progress/Review',
     };
 
     await processTicket('UTR-100', { config: reviewConfig, client });

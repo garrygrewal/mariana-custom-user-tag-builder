@@ -8,7 +8,7 @@ export interface JiraConfig {
   /** Optional transition id to move the ticket after design review is posted. */
   transitionId?: string;
   /**
-   * Target status name when moving the ticket for design review (default: In Progress).
+   * Target status name when moving the ticket for design review (default: In Progress/Review).
    * Resolved via available transitions. Set to empty string to disable.
    */
   transitionStatus?: string;
@@ -37,7 +37,7 @@ export function getJiraConfig(): JiraConfig {
     transitionStatus:
       process.env.JIRA_TRANSITION_STATUS === ''
         ? undefined
-        : (process.env.JIRA_TRANSITION_STATUS ?? 'In Progress'),
+        : (process.env.JIRA_TRANSITION_STATUS ?? 'In Progress/Review'),
     commentVisibilityRole: process.env.JIRA_COMMENT_VISIBILITY_ROLE || undefined,
     reviewAccountId: process.env.JIRA_REVIEW_ACCOUNT_ID || undefined,
     reviewMentionText: process.env.JIRA_REVIEW_MENTION_TEXT || undefined,
