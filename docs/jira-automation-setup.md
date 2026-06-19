@@ -129,18 +129,21 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 
 1. **Trigger:** `Comment added`.
 2. **Conditions (recommended):**
-   - Comment body contains `/regenerate-tag`
-   - User is in group **Designers** (or your designer group)
+   - Smart values: `{{comment.body}}` **contains** `/regenerate-tag`
+   - User is in group **Designers** (or your designer group) — remove this
+     temporarily while testing if the rule never fires
    - Issue type matches your UTR / design-request type
 3. **Action:** `Send web request` (same URL and headers as the create rule):
-   - **Web request body:** `Custom data`:
+   - **Web request body:** `Custom data` (not Empty):
      ```json
      {
        "issue": { "key": "{{issue.key}}" },
-       "revisionNotes": "{{comment.bodyAsText}}",
+       "revisionNotes": "{{comment.body}}",
        "commentAuthorId": "{{comment.author.accountId}}"
      }
      ```
+   - Use `{{comment.body}}` (not `comment.bodyAsText` — that smart value is not
+     available on all Jira project types).
    - Leave "Wait for response" off.
 
 The webhook strips `/regenerate-tag`, passes the remaining text into the AI
@@ -167,3 +170,21 @@ curl -X POST http://localhost:3000/api/jira-webhook \
     "commentAuthorId": "<your-atlassian-account-id>"
   }'
 ```
+
+### Troubleshooting: rule never fires
+
+If `/regenerate-tag` comments appear on the ticket but no new design-review
+comment is posted:
+
+1. Open the rule → **Audit log** / **Rule executions** and find the comment time.
+   - Stopped at a **condition** → fix that condition (User group is the most
+     common blocker).
+   - **Send web request failed** → check URL, allowlist, and headers.
+2. Confirm the rule is **Enabled** (not draft).
+3. Confirm web request body is **Custom data**, not Empty.
+4. Use `{{comment.body}}` in both the condition and the JSON body.
+5. Strip the rule down to **Trigger + Send web request only** (no conditions),
+   post any comment, and confirm a new design-review comment appears. Then add
+   conditions back one at a time.
+6. Vercel logs should show `POST /api/jira-webhook` with status `200` when Jira
+   calls successfully. No log entry means Jira never sent the request.
