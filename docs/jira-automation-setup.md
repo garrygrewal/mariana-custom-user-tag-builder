@@ -107,3 +107,63 @@ curl -X POST http://localhost:3000/api/jira-webhook \
   -H 'x-webhook-secret: <secret>' \
   -d '{"issue":{"key":"UTR-123"}}'
 ```
+
+## 7. Regenerate after designer feedback (`/regenerate-tag`)
+
+When a tag needs another pass, a designer comments on the ticket:
+
+```
+/regenerate-tag darker green, simpler smile icon
+```
+
+Omit text after the command to re-run from the ticket fields only (for example
+after support updated the form):
+
+```
+/regenerate-tag
+```
+
+### Automation rule (second rule)
+
+In the UTR project: **Project settings -> Automation -> Create rule**.
+
+1. **Trigger:** `Comment added`.
+2. **Conditions (recommended):**
+   - Comment body contains `/regenerate-tag`
+   - User is in group **Designers** (or your designer group)
+   - Issue type matches your UTR / design-request type
+3. **Action:** `Send web request` (same URL and headers as the create rule):
+   - **Web request body:** `Custom data`:
+     ```json
+     {
+       "issue": { "key": "{{issue.key}}" },
+       "revisionNotes": "{{comment.bodyAsText}}",
+       "commentAuthorId": "{{comment.author.accountId}}"
+     }
+     ```
+   - Leave "Wait for response" off.
+
+The webhook strips `/regenerate-tag`, passes the remaining text into the AI
+prompt and classifier, and applies color overrides when the notes include a hex
+or color name (single-tag tickets). The design-review comment includes a line
+such as "Regenerated per designer notes: …".
+
+### Authorization
+
+Set `JIRA_ALLOWED_REGENERATE_ACCOUNT_IDS` to a comma-separated list of designer
+Atlassian accountIds. When unset, the allowlist defaults to
+`JIRA_REVIEW_ACCOUNT_ID`, `JIRA_ADDITIONAL_REVIEW_MENTIONS`, and
+`JIRA_ASSIGNEE_ACCOUNT_ID`. Requests from other authors receive HTTP 403.
+
+### Local test
+
+```bash
+curl -X POST http://localhost:3000/api/jira-webhook \
+  -H 'content-type: application/json' \
+  -H 'x-webhook-secret: <secret>' \
+  -d '{
+    "issue": { "key": "UTR-123" },
+    "revisionNotes": "/regenerate-tag darker green, simpler icon",
+    "commentAuthorId": "<your-atlassian-account-id>"
+  }'
+```

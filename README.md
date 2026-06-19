@@ -105,8 +105,9 @@ Notes:
   multi-tag requests get multiple distinct options.
 
 Setup: see [`docs/jira-automation-setup.md`](docs/jira-automation-setup.md) for
-the Automation rule and [`.env.example`](.env.example) for configuration. The
-design rules shared by the classifier and the AI prompt are in
+the Automation rule (including `/regenerate-tag` for designer re-runs) and
+[`.env.example`](.env.example) for configuration. The design rules shared by the
+classifier and the AI prompt are in
 [`docs/user-tag-design-guidelines.md`](docs/user-tag-design-guidelines.md).
 
 ## Project structure

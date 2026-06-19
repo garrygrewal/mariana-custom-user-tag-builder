@@ -25,18 +25,41 @@ export interface JiraConfig {
   assigneeAccountId?: string;
 }
 
+/** Atlassian accountId: 24-char hex or `siteId:uuid` (uuid may contain colons in the id segment). */
+const ATLASSIAN_ACCOUNT_ID =
+  /^(?:[a-f0-9]{24}|\d+:[0-9a-f-]{8}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{4}-[0-9a-f-]{12})$/i;
+
 /** Parse `accountId:@Display Name` entries from a comma-separated env value. */
-function parseReviewMentionsEnv(value: string | undefined): ReviewMention[] {
+export function parseReviewMentionsEnv(value: string | undefined): ReviewMention[] {
   if (!value?.trim()) return [];
   return value.split(',').flatMap((entry) => {
     const trimmed = entry.trim();
     if (!trimmed) return [];
+
+    const displayDelimiter = trimmed.indexOf(':@');
+    if (displayDelimiter !== -1) {
+      const accountId = trimmed.slice(0, displayDelimiter).trim();
+      const text = trimmed.slice(displayDelimiter + 1).trim();
+      if (!accountId) return [];
+      return [{ accountId, text: text || '@reviewer' }];
+    }
+
+    if (ATLASSIAN_ACCOUNT_ID.test(trimmed)) {
+      return [{ accountId: trimmed, text: '@reviewer' }];
+    }
+
     const colon = trimmed.indexOf(':');
     if (colon === -1) return [{ accountId: trimmed, text: '@reviewer' }];
+
     const accountId = trimmed.slice(0, colon).trim();
-    const text = trimmed.slice(colon + 1).trim();
+    const rawText = trimmed.slice(colon + 1).trim();
     if (!accountId) return [];
-    return [{ accountId, text: text || '@reviewer' }];
+    const text = rawText
+      ? rawText.startsWith('@')
+        ? rawText
+        : `@${rawText}`
+      : '@reviewer';
+    return [{ accountId, text }];
   });
 }
 
@@ -93,4 +116,48 @@ function buildReviewMentions(): ReviewMention[] | undefined {
 /** Shared secret used to authenticate inbound webhook calls. */
 export function getWebhookSecret(): string | undefined {
   return process.env.WEBHOOK_SECRET || undefined;
+}
+
+export class RegenerateAuthError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RegenerateAuthError';
+  }
+}
+
+/**
+ * Account ids allowed to trigger `/regenerate-tag` regeneration.
+ * Falls back to review/assignee ids when `JIRA_ALLOWED_REGENERATE_ACCOUNT_IDS` is unset.
+ */
+export function getAllowedRegenerateAccountIds(): string[] {
+  const explicit = process.env.JIRA_ALLOWED_REGENERATE_ACCOUNT_IDS?.trim();
+  if (explicit) {
+    return explicit
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  const ids = new Set<string>();
+  const reviewAccountId = process.env.JIRA_REVIEW_ACCOUNT_ID?.trim();
+  if (reviewAccountId) ids.add(reviewAccountId);
+  for (const mention of parseReviewMentionsEnv(process.env.JIRA_ADDITIONAL_REVIEW_MENTIONS)) {
+    ids.add(mention.accountId);
+  }
+  const assigneeAccountId = process.env.JIRA_ASSIGNEE_ACCOUNT_ID?.trim();
+  if (assigneeAccountId) ids.add(assigneeAccountId);
+  return [...ids];
+}
+
+/** Reject regeneration when the comment author is not on the allowlist. */
+export function assertRegenerateAuthorized(commentAuthorId: string | undefined): void {
+  const allowed = getAllowedRegenerateAccountIds();
+  if (allowed.length === 0) {
+    throw new RegenerateAuthError(
+      'Regeneration is not configured. Set JIRA_ALLOWED_REGENERATE_ACCOUNT_IDS or JIRA_REVIEW_ACCOUNT_ID.',
+    );
+  }
+  if (!commentAuthorId || !allowed.includes(commentAuthorId)) {
+    throw new RegenerateAuthError('Comment author is not allowed to regenerate user tags.');
+  }
 }

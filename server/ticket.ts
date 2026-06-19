@@ -30,6 +30,8 @@ export interface TagRequest {
   /** When count > 1, per-tag icon/color specs parsed from the form fields. */
   variants?: TagVariant[];
   dueDate?: string;
+  /** Designer revision notes from a `/regenerate-tag` comment (not on the ticket). */
+  revisionNotes?: string;
 }
 
 /** Minimal shape of the Jira issue JSON we rely on. */
@@ -321,4 +323,28 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
     variants,
     dueDate: typeof fields.duedate === 'string' ? fields.duedate : undefined,
   };
+}
+
+/**
+ * Merge designer revision notes into a parsed request. Color names or hex values
+ * in the notes override the ticket color for single-tag requests.
+ */
+export function applyRevisionNotes(req: TagRequest, revisionNotes: string): TagRequest {
+  const trimmed = revisionNotes.trim();
+  if (!trimmed) {
+    return { ...req, revisionNotes: '' };
+  }
+
+  const updated: TagRequest = { ...req, revisionNotes: trimmed };
+  const color = extractColor(trimmed);
+  if (!color.matched || req.count > 1) {
+    return updated;
+  }
+
+  updated.bgHex = color.hex;
+  updated.colorMatched = true;
+  if (updated.variants?.length === 1) {
+    updated.variants = [{ ...updated.variants[0], bgHex: color.hex, colorMatched: true }];
+  }
+  return updated;
 }

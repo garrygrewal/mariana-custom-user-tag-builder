@@ -365,10 +365,11 @@ function iconHintSatisfied(req: TagRequest, match: IconMatch): boolean {
 }
 
 function buildMatchHaystacks(req: TagRequest): { priority: string; full: string } {
-  const priority = [req.iconHint, req.tagName].filter(Boolean).join('\n');
+  const revision = req.revisionNotes?.trim();
+  const priority = [req.iconHint, req.tagName, revision].filter(Boolean).join('\n');
   const full = priority
     ? `${priority}\n${req.description}`
-    : `${req.tagName}\n${req.description}`;
+    : [req.tagName, req.description, revision].filter(Boolean).join('\n');
   return { priority, full };
 }
 

@@ -6,7 +6,7 @@ import {
   type JiraClientLike,
   type JiraTransition,
 } from './jira.js';
-import { parseTicket } from './ticket.js';
+import { parseTicket, applyRevisionNotes } from './ticket.js';
 import { generateTag, type GeneratedArtifact } from './tagGenerator.js';
 import { buildArtifactZip } from './artifactZip.js';
 
@@ -60,18 +60,25 @@ export interface ProcessResult {
   mode: string;
   artifactCount: number;
   attachments: string[];
+  regenerated?: boolean;
 }
 
 export interface ProcessDeps {
   config?: JiraConfig;
   client?: JiraClientLike;
+  /** Parsed notes after `/regenerate-tag` from the triggering comment. */
+  revisionNotes?: string;
 }
 
 /**
  * Build the design-review comment: a single line that @mentions the reviewer,
  * followed by labeled inline SVG preview(s) and downloadable ZIP bundle(s).
  */
-function buildReviewComment(config: JiraConfig, options: ReviewOption[]): AdfDoc {
+function buildReviewComment(
+  config: JiraConfig,
+  options: ReviewOption[],
+  revisionNotes?: string,
+): AdfDoc {
   const paragraph: { type: 'paragraph'; content: unknown[] } = {
     type: 'paragraph',
     content: [],
@@ -93,6 +100,18 @@ function buildReviewComment(config: JiraConfig, options: ReviewOption[]): AdfDoc
   }
 
   const content: unknown[] = [paragraph];
+
+  if (revisionNotes?.trim()) {
+    content.push({
+      type: 'paragraph',
+      content: [
+        {
+          type: 'text',
+          text: `Regenerated per designer notes: ${revisionNotes.trim()}`,
+        },
+      ],
+    });
+  }
 
   for (const option of options) {
     content.push({
@@ -199,7 +218,11 @@ export async function processTicket(
 
   try {
     const issue = await client.getIssue(issueKey);
-    const req = parseTicket(issue, config.fieldMap);
+    let req = parseTicket(issue, config.fieldMap);
+    const regenerated = deps.revisionNotes !== undefined;
+    if (deps.revisionNotes !== undefined) {
+      req = applyRevisionNotes(req, deps.revisionNotes);
+    }
     const result = await generateTag(req);
 
     const attachments: string[] = [];
@@ -240,7 +263,10 @@ export async function processTicket(
       attachments.push(artifact.svgFileName, artifact.pngFileName, artifact.zipFileName);
     }
 
-    await client.addComment(issueKey, buildReviewComment(config, reviewOptions));
+    await client.addComment(
+      issueKey,
+      buildReviewComment(config, reviewOptions, deps.revisionNotes),
+    );
 
     try {
       await assignForDesignReview(issueKey, config, client);
@@ -264,6 +290,7 @@ export async function processTicket(
       mode: result.classification.mode,
       artifactCount: result.artifacts.length,
       attachments,
+      regenerated: regenerated || undefined,
     };
   } catch (error) {
     await client.addComment(issueKey, buildFailureComment(error)).catch(() => {});

@@ -28,6 +28,14 @@ describe('extractColor', () => {
     expect(r.source).toBe('name');
     expect(r.matched).toBe(true);
   });
+  it('prefers the color tied to "background" when both background and icon colors appear', () => {
+    const r = extractColor('Black background - Sage green icon');
+    expect(r).toMatchObject({ hex: '#000000', matched: true, source: 'name' });
+  });
+  it('recognizes sage green as a background color', () => {
+    const r = extractColor('Sage green background');
+    expect(r).toMatchObject({ hex: '#9CAF88', matched: true, source: 'name' });
+  });
   it('uses the default when nothing matches', () => {
     const r = extractColor('no color mentioned here');
     expect(r).toMatchObject({ hex: DEFAULT_BG_HEX, matched: false, source: 'default' });

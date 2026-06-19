@@ -310,6 +310,22 @@ describe('processTicket', () => {
     expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
 
+  it('includes regeneration context in the review comment', async () => {
+    const client = new FakeJiraClient(
+      issueWith('Star Member', 'show a star for favorites, color purple'),
+    );
+
+    const result = await processTicket('UTR-100', {
+      config,
+      client,
+      revisionNotes: 'simpler star, darker purple',
+    });
+
+    expect(result.regenerated).toBe(true);
+    const text = commentText(client.comments[0]);
+    expect(text).toContain('Regenerated per designer notes: simpler star, darker purple');
+  });
+
   it('posts a failure comment and rethrows when generation fails', async () => {
     const badIssue: JiraIssue = {
       key: 'UTR-101',

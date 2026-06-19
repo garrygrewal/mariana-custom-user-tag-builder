@@ -127,6 +127,13 @@ function userPrompt(
       'Do not combine multiple unrelated concepts into one icon.',
     );
   }
+  if (req.revisionNotes?.trim()) {
+    lines.push(
+      '',
+      'Designer revision notes (apply these changes to the previous design):',
+      req.revisionNotes.trim(),
+    );
+  }
   if (validationFeedback) {
     lines.push(
       '',
