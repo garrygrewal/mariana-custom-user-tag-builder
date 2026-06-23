@@ -4,7 +4,11 @@ import {
   getWebhookSecret,
   RegenerateAuthError,
 } from '../server/config.js';
-import { extractIssueKey, extractRegenerateRequest } from '../server/webhookPayload.js';
+import {
+  extractRegenerateRequest,
+  hasUnsubstitutedSmartValuesInRequest,
+  resolveIssueKey,
+} from '../server/webhookPayload.js';
 import { processTicket } from '../server/processTicket.js';
 
 /**
@@ -33,12 +37,20 @@ export default async function handler(
     }
   }
 
-  const issueKey =
-    extractIssueKey(req.body) ??
-    (typeof req.query.key === 'string' ? extractIssueKey(req.query.key) : null);
+  const issueKey = resolveIssueKey(req.body, req.query);
 
   if (!issueKey) {
-    res.status(400).json({ ok: false, error: 'Could not resolve a Jira issue key' });
+    const smartValueLeft = hasUnsubstitutedSmartValuesInRequest(req.body, req.query);
+    res.status(400).json({
+      ok: false,
+      error: smartValueLeft
+        ? 'Jira smart value was not substituted (body still contains {{...}})'
+        : 'Could not resolve a Jira issue key',
+      hint: smartValueLeft
+        ? 'Re-insert {{issue.key}} using the {} smart-value picker in Custom data, or add ?key={{issue.key}} to the URL.'
+        : 'Set Custom data to {"issue":{"key":"{{issue.key}}"}}, use Work item data (Automation format), ' +
+          'or pass ?key={{issue.key}} on the URL. Use Content-Type: application/json (lowercase).',
+    });
     return;
   }
 

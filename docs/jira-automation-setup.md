@@ -8,7 +8,7 @@ designer to review.
 ```
 UTR ticket created
    -> Jira Automation rule (Send web request)
-   -> POST https://<your-app>.vercel.app/api/jira-webhook
+   -> POST https://<your-app>.vercel.app/api/jira-webhook?key={{issue.key}}
    -> generate (builder | AI) -> rasterize -> attach SVG+PNG -> draft comment
    -> designer reviews, then forwards the approved tag to the client
 ```
@@ -41,11 +41,13 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 2. **Condition (recommended):** restrict to the design-request issue type /
    form so unrelated issues don't trigger generation.
 3. **Action:** `Send web request`:
-   - **Web request URL:** `https://<your-app>.vercel.app/api/jira-webhook`
+   - **Web request URL:** `https://<your-app>.vercel.app/api/jira-webhook?key={{issue.key}}`
+     (issue key in the URL **and** the JSON body below — either one alone works if
+     configured correctly; both is recommended)
    - **HTTP method:** `POST`
    - **Headers:**
-     - `Content-Type: application/json`
-     - `x-webhook-secret: <your WEBHOOK_SECRET>`
+     - `Content-Type: application/json` (use lowercase — `Application/JSON` can prevent the body from being parsed)
+     - `x-webhook-secret: <your WEBHOOK_SECRET>` (check **Hidden** so the value is masked after save)
    - **Web request body:** `Custom data`:
      ```json
      { "issue": { "key": "{{issue.key}}" } }
@@ -97,18 +99,47 @@ parsing the tag name from the summary and the color/count from the description
 text. (Find ids via `/rest/api/3/field`, the issue-type create metadata, or the
 automation rule's smart-value list.)
 
-## 6. Local testing
+## 6. Troubleshooting: HTTP 400 "Could not resolve a Jira issue key"
+
+The webhook authenticated successfully but the POST body did not contain a
+parseable issue key (for example `UTR-123`). Open the rule → **Audit log** → the
+failed **Send web request** step and check the outgoing body.
+
+**Most common fix:** set **Web request body** to **Custom data** (not Empty) with:
+
+```json
+{ "issue": { "key": "{{issue.key}}" } }
+```
+
+Also confirm:
+
+| Check | Expected |
+| --- | --- |
+| Smart value | `{{issue.key}}` — not `{{issue.fields.key}}` |
+| Header | `Content-Type: application/json` (lowercase, not `Application/JSON`) |
+| Substituted value | Body shows `UTR-123`, not literal `{{issue.key}}` |
+| Alternative body | **Work item data (Automation format)** also works (top-level `key`) |
+| URL | `https://<app>.vercel.app/api/jira-webhook?key={{issue.key}}` (recommended default) |
+
+If the body is correct in the audit log but the webhook still returns 400, redeploy
+the latest app so the webhook accepts Automation-format payloads and URL fallbacks.
+
+## 7. Local testing
 
 ```bash
 vercel dev            # serves /api/jira-webhook locally
 # then, with env vars set:
-curl -X POST http://localhost:3000/api/jira-webhook \
+curl -X POST 'http://localhost:3000/api/jira-webhook?key=UTR-123' \
   -H 'content-type: application/json' \
   -H 'x-webhook-secret: <secret>' \
   -d '{"issue":{"key":"UTR-123"}}'
+
+# Query-only fallback (simulates an unparsed JSON body):
+curl -X POST 'http://localhost:3000/api/jira-webhook?key=UTR-123' \
+  -H 'x-webhook-secret: <secret>'
 ```
 
-## 7. Regenerate after designer feedback (`/regenerate-tag`)
+## 8. Regenerate after designer feedback (`/regenerate-tag`)
 
 When a tag needs another pass, a designer comments on the ticket:
 
@@ -133,7 +164,7 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
    - User is in group **Designers** (or your designer group) — remove this
      temporarily while testing if the rule never fires
    - Issue type matches your UTR / design-request type
-3. **Action:** `Send web request` (same URL and headers as the create rule):
+3. **Action:** `Send web request` (same URL — including `?key={{issue.key}}` — and headers as the create rule):
    - **Web request body:** `Custom data` (not Empty):
      ```json
      {
