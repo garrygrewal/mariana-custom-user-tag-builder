@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseReviewMentionsEnv } from '../../server/config.js';
+import { parseReviewMentionsEnv, pickRandomReviewMention } from '../../server/config.js';
 
 describe('parseReviewMentionsEnv', () => {
   it('parses legacy account ids with @ display names', () => {
@@ -50,5 +50,27 @@ describe('parseReviewMentionsEnv', () => {
         text: '@reviewer',
       },
     ]);
+  });
+});
+
+describe('pickRandomReviewMention', () => {
+  const pool = [
+    { accountId: 'a', text: '@One' },
+    { accountId: 'b', text: '@Two' },
+    { accountId: 'c', text: '@Three' },
+  ];
+
+  it('returns undefined for an empty pool', () => {
+    expect(pickRandomReviewMention([])).toBeUndefined();
+  });
+
+  it('returns the only member when the pool has one entry', () => {
+    expect(pickRandomReviewMention([pool[0]])).toEqual(pool[0]);
+  });
+
+  it('selects by index from the random function', () => {
+    expect(pickRandomReviewMention(pool, () => 0)).toEqual(pool[0]);
+    expect(pickRandomReviewMention(pool, () => 0.99)).toEqual(pool[2]);
+    expect(pickRandomReviewMention(pool, () => 0.5)).toEqual(pool[1]);
   });
 });

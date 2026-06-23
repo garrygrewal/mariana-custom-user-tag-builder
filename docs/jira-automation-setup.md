@@ -61,9 +61,9 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 - **Attachments:** `custom-tag_<slug>_<hex>.svg`, `.png`, and `.zip` (one set per
   option; complex requests may include `Option 1..N`). When a library match is
   low-confidence, a second `_ai` artifact set is also attached.
-- **Comment:** a design-review comment that @mentions the configured reviewer(s)
-  (`JIRA_REVIEW_ACCOUNT_ID` plus optional `JIRA_ADDITIONAL_REVIEW_MENTIONS`),
-  embeds the generated tag SVG(s) inline at a
+- **Comment:** a design-review comment that @mentions one randomly selected
+  designer from the configured pool (`JIRA_REVIEW_ACCOUNT_ID` plus optional
+  `JIRA_ADDITIONAL_REVIEW_MENTIONS`), embeds the generated tag SVG(s) inline at a
   reduced size (vector, so they stay crisp), and includes a downloadable ZIP
   bundle (SVG + PNG) per tag. Low-confidence simple matches label **Option A
   (library)** and **Option B (AI-generated)** in a single comment. The only
@@ -180,7 +180,8 @@ In the UTR project: **Project settings -> Automation -> Create rule**.
 The webhook strips `/regenerate-tag`, passes the remaining text into the AI
 prompt and classifier, and applies color overrides when the notes include a hex
 or color name (single-tag tickets). The design-review comment includes a line
-such as "Regenerated per designer notes: …".
+such as "Regenerated per designer notes: …". Regeneration does not @mention
+designers (the comment author is already on the ticket).
 
 ### Authorization
 

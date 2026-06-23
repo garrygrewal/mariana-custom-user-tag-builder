@@ -112,11 +112,15 @@ function commentText(doc: AdfDoc): string {
 
 describe('processTicket', () => {
   it('handles a simple icon ticket via the builder', async () => {
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0);
+
     const client = new FakeJiraClient(
       issueWith('Star Member', 'show a star for favorites, color purple'),
     );
 
     const result = await processTicket('UTR-100', { config, client });
+
+    randomSpy.mockRestore();
 
     expect(result.isComplex).toBe(false);
     expect(result.mode).toBe('icon');
@@ -132,7 +136,7 @@ describe('processTicket', () => {
     expect(text).toContain('DESIGN REVIEW NEEDED');
     expect(text.toLowerCase()).not.toContain('intercom');
     expect(mentions(client.comments[0], 'acct-123')).toBe(true);
-    expect(mentions(client.comments[0], 'acct-456')).toBe(true);
+    expect(mentions(client.comments[0], 'acct-456')).toBe(false);
     // One inline SVG preview and one ZIP download per artifact.
     expect(embeddedFileCount(client.comments[0])).toBe(2);
   });
@@ -324,6 +328,8 @@ describe('processTicket', () => {
     expect(result.regenerated).toBe(true);
     const text = commentText(client.comments[0]);
     expect(text).toContain('Regenerated per designer notes: simpler star, darker purple');
+    expect(mentions(client.comments[0], 'acct-123')).toBe(false);
+    expect(mentions(client.comments[0], 'acct-456')).toBe(false);
   });
 
   it('posts a failure comment and rethrows when generation fails', async () => {

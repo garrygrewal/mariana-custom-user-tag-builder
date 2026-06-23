@@ -1,4 +1,9 @@
-import { getJiraConfig, type JiraConfig } from './config.js';
+import {
+  getJiraConfig,
+  pickRandomReviewMention,
+  type JiraConfig,
+  type ReviewMention,
+} from './config.js';
 import {
   buildAdf,
   JiraClient,
@@ -75,7 +80,7 @@ export interface ProcessDeps {
  * followed by labeled inline SVG preview(s) and downloadable ZIP bundle(s).
  */
 function buildReviewComment(
-  config: JiraConfig,
+  reviewMentions: ReviewMention[] | undefined,
   options: ReviewOption[],
   revisionNotes?: string,
 ): AdfDoc {
@@ -83,12 +88,12 @@ function buildReviewComment(
     type: 'paragraph',
     content: [],
   };
-  if (config.reviewMentions?.length) {
-    for (let i = 0; i < config.reviewMentions.length; i++) {
+  if (reviewMentions?.length) {
+    for (let i = 0; i < reviewMentions.length; i++) {
       if (i > 0) {
         paragraph.content.push({ type: 'text', text: ' ' });
       }
-      const mention = config.reviewMentions[i];
+      const mention = reviewMentions[i];
       paragraph.content.push({
         type: 'mention',
         attrs: { id: mention.accountId, text: mention.text },
@@ -263,9 +268,15 @@ export async function processTicket(
       attachments.push(artifact.svgFileName, artifact.pngFileName, artifact.zipFileName);
     }
 
+    let reviewMentionsForComment: ReviewMention[] | undefined;
+    if (deps.revisionNotes === undefined) {
+      const picked = pickRandomReviewMention(config.reviewMentions ?? []);
+      reviewMentionsForComment = picked ? [picked] : undefined;
+    }
+
     await client.addComment(
       issueKey,
-      buildReviewComment(config, reviewOptions, deps.revisionNotes),
+      buildReviewComment(reviewMentionsForComment, reviewOptions, deps.revisionNotes),
     );
 
     try {

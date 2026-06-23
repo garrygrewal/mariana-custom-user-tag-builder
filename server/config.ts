@@ -113,6 +113,16 @@ function buildReviewMentions(): ReviewMention[] | undefined {
   return mentions.length > 0 ? mentions : undefined;
 }
 
+/** Pick one designer at random from the configured review-mention pool. */
+export function pickRandomReviewMention(
+  mentions: ReviewMention[],
+  random: () => number = Math.random,
+): ReviewMention | undefined {
+  if (mentions.length === 0) return undefined;
+  const index = Math.floor(random() * mentions.length);
+  return mentions[index];
+}
+
 /** Shared secret used to authenticate inbound webhook calls. */
 export function getWebhookSecret(): string | undefined {
   return process.env.WEBHOOK_SECRET || undefined;
