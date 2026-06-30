@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { applyRevisionNotes, type TagRequest } from '../../server/ticket';
+import { applyShadeModifier } from '../../server/colors';
 
 const baseReq: TagRequest = {
   issueKey: 'UTR-1',
@@ -16,13 +17,22 @@ describe('applyRevisionNotes', () => {
     expect(updated.revisionNotes).toBe('simpler icon');
   });
 
-  it('overrides the background color when notes include a color name', () => {
+  it('overrides the background color when notes include a shaded color name', () => {
     const updated = applyRevisionNotes(baseReq, 'use darker green');
-    expect(updated.bgHex).toBe('#3DAE2B');
+    expect(updated.bgHex).toBe(applyShadeModifier('#3DAE2B', 'darker'));
     expect(updated.colorMatched).toBe(true);
   });
 
-  it('does not override color for multi-tag requests', () => {
+  it('forces an explicit icon id from revision notes', () => {
+    const updated = applyRevisionNotes(
+      baseReq,
+      'use a lighter shade of pink (pastel pink), and use the user-long-hair icon',
+    );
+    expect(updated.explicitIconId).toBe('nucleo-user-long-hair');
+    expect(updated.bgHex).toBe(applyShadeModifier('#EC4899', 'pastel'));
+  });
+
+  it('overrides color for multi-tag requests when notes include a color', () => {
     const multi: TagRequest = {
       ...baseReq,
       count: 2,
@@ -32,7 +42,8 @@ describe('applyRevisionNotes', () => {
       ],
     };
     const updated = applyRevisionNotes(multi, 'use navy');
-    expect(updated.bgHex).toBe('#6923F4');
+    expect(updated.bgHex).toBe('#001F5B');
+    expect(updated.variants?.every((variant) => variant.bgHex === '#001F5B')).toBe(true);
     expect(updated.revisionNotes).toBe('use navy');
   });
 });

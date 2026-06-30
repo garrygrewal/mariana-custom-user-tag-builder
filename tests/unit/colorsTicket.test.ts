@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractColor, normalizeHex, DEFAULT_BG_HEX } from '../../server/colors';
+import { extractColor, normalizeHex, DEFAULT_BG_HEX, applyShadeModifier } from '../../server/colors';
 import {
   parseTicket,
   adfToText,
@@ -39,6 +39,25 @@ describe('extractColor', () => {
   it('uses the default when nothing matches', () => {
     const r = extractColor('no color mentioned here');
     expect(r).toMatchObject({ hex: DEFAULT_BG_HEX, matched: false, source: 'default' });
+  });
+
+  it('applies lighter shade modifiers', () => {
+    const r = extractColor('use a lighter shade of pink');
+    expect(r.matched).toBe(true);
+    expect(r.hex).not.toBe('#EC4899');
+    expect(r.hex).toBe(applyShadeModifier('#EC4899', 'lighter'));
+  });
+
+  it('applies pastel modifiers', () => {
+    const r = extractColor('pastel pink background');
+    expect(r.matched).toBe(true);
+    expect(r.hex).toBe(applyShadeModifier('#EC4899', 'pastel'));
+  });
+
+  it('applies darker modifiers', () => {
+    const r = extractColor('darker blue');
+    expect(r.matched).toBe(true);
+    expect(r.hex).toBe(applyShadeModifier('#2D6CDF', 'darker'));
   });
 });
 

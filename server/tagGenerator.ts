@@ -5,6 +5,7 @@ import { buildOutlinedTextPath } from '../src/lib/textToPath.js';
 import { pickForeground } from '../src/lib/contrast.js';
 import { toSlug } from '../src/lib/slugify.js';
 import { classify, type Classification } from './classify.js';
+import { resolveExplicitIconId } from './iconIntent.js';
 import { getIconById, loadIconRegistry } from './icons.node.js';
 import { loadFontTtf } from './fonts.node.js';
 import { svgToPng } from './rasterize.node.js';
@@ -102,6 +103,7 @@ async function generateDistinctTags(
   options: GenerateOptions,
 ): Promise<GenerationResult> {
   const variants = req.variants!.slice(0, req.count);
+  const registry = loadIconRegistry();
   const artifacts: GeneratedArtifact[] = [];
   const warnings: string[] = [];
   let classification: Classification | null = null;
@@ -109,10 +111,14 @@ async function generateDistinctTags(
   let anyComplex = false;
 
   for (const variant of variants) {
+    const iconHint = variant.iconHint ?? req.iconHint;
     const variantReq: TagRequest = {
       ...req,
       tagName: variant.label,
-      iconHint: variant.iconHint ?? req.iconHint,
+      iconHint,
+      explicitIconId:
+        (iconHint ? resolveExplicitIconId(iconHint, registry) : null) ??
+        req.explicitIconId,
       bgHex: variant.bgHex,
       colorMatched: variant.colorMatched,
       count: 1,

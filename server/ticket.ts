@@ -1,4 +1,6 @@
 import { extractColor } from './colors.js';
+import { resolveExplicitIconId } from './iconIntent.js';
+import { loadIconRegistry } from './icons.node.js';
 
 /** Per-tag spec when a ticket requests multiple distinct icons/tags. */
 export interface TagVariant {
@@ -27,6 +29,8 @@ export interface TagRequest {
   description: string;
   /** Requested icon / visual hint from the ticket (e.g. "Lululemon logo"). */
   iconHint?: string;
+  /** When set, force this registered library icon id. */
+  explicitIconId?: string;
   /** When count > 1, per-tag icon/color specs parsed from the form fields. */
   variants?: TagVariant[];
   dueDate?: string;
@@ -312,6 +316,13 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
     color.matched,
   );
 
+  const iconHint = iconField || undefined;
+  const registry = loadIconRegistry();
+  const explicitIconId =
+    (iconHint ? resolveExplicitIconId(iconHint, registry) : null) ??
+    resolveExplicitIconId(searchText, registry) ??
+    undefined;
+
   return {
     issueKey: issue.key,
     tagName,
@@ -319,15 +330,16 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
     colorMatched: color.matched,
     count,
     description,
-    iconHint: iconField || undefined,
+    iconHint,
+    explicitIconId,
     variants,
     dueDate: typeof fields.duedate === 'string' ? fields.duedate : undefined,
   };
 }
 
 /**
- * Merge designer revision notes into a parsed request. Color names or hex values
- * in the notes override the ticket color for single-tag requests.
+ * Merge designer revision notes into a parsed request. Color names, hex values,
+ * shade modifiers, and explicit icon ids in the notes override the ticket.
  */
 export function applyRevisionNotes(req: TagRequest, revisionNotes: string): TagRequest {
   const trimmed = revisionNotes.trim();
@@ -336,15 +348,24 @@ export function applyRevisionNotes(req: TagRequest, revisionNotes: string): TagR
   }
 
   const updated: TagRequest = { ...req, revisionNotes: trimmed };
-  const color = extractColor(trimmed);
-  if (!color.matched || req.count > 1) {
-    return updated;
+  const registry = loadIconRegistry();
+  const explicitIconId = resolveExplicitIconId(trimmed, registry);
+  if (explicitIconId) {
+    updated.explicitIconId = explicitIconId;
   }
 
-  updated.bgHex = color.hex;
-  updated.colorMatched = true;
-  if (updated.variants?.length === 1) {
-    updated.variants = [{ ...updated.variants[0], bgHex: color.hex, colorMatched: true }];
+  const color = extractColor(trimmed);
+  if (color.matched) {
+    updated.bgHex = color.hex;
+    updated.colorMatched = true;
+    if (updated.variants?.length) {
+      updated.variants = updated.variants.map((variant) => ({
+        ...variant,
+        bgHex: color.hex,
+        colorMatched: true,
+      }));
+    }
   }
+
   return updated;
 }

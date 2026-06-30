@@ -1,6 +1,7 @@
 import type { IconDef } from '../src/types.js';
 import { TEXT_MAX_LENGTH } from '../src/constants.js';
 import { isNucleoIconId } from './nucleoIcons.node.js';
+import { iconMatchText } from './iconIntent.js';
 import type { TagRequest } from './ticket.js';
 
 export type Confidence = 'high' | 'low';
@@ -366,10 +367,14 @@ function iconHintSatisfied(req: TagRequest, match: IconMatch): boolean {
 
 function buildMatchHaystacks(req: TagRequest): { priority: string; full: string } {
   const revision = req.revisionNotes?.trim();
-  const priority = [req.iconHint, req.tagName, revision].filter(Boolean).join('\n');
+  const iconHint = req.iconHint ? iconMatchText(req.iconHint) : undefined;
+  const cleanedRevision = revision ? iconMatchText(revision) : undefined;
+  const cleanedDescription = iconMatchText(req.description);
+  const cleanedTagName = iconMatchText(req.tagName);
+  const priority = [iconHint, cleanedTagName, cleanedRevision].filter(Boolean).join('\n');
   const full = priority
-    ? `${priority}\n${req.description}`
-    : [req.tagName, req.description, revision].filter(Boolean).join('\n');
+    ? `${priority}\n${cleanedDescription}`
+    : [cleanedTagName, cleanedDescription, cleanedRevision].filter(Boolean).join('\n');
   return { priority, full };
 }
 
@@ -534,6 +539,21 @@ function highTextClassification(
  * matching so studio names in the description cannot misroute the request.
  */
 export function classify(req: TagRequest, registry: IconDef[]): Classification {
+  if (req.explicitIconId) {
+    const icon = registry.find((entry) => entry.id === req.explicitIconId);
+    if (icon) {
+      return {
+        isComplex: false,
+        mode: 'icon',
+        iconId: icon.id,
+        iconLabel: icon.label,
+        confidence: 'high',
+        fallbackToAi: false,
+        reason: `Designer specified library icon "${icon.id}".`,
+      };
+    }
+  }
+
   const { priority, full } = buildMatchHaystacks(req);
   const hay = req.iconHint?.trim() ? priority : full;
 
