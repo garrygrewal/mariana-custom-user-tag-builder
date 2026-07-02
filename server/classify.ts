@@ -6,7 +6,7 @@ import type { TagRequest } from './ticket.js';
 
 export type Confidence = 'high' | 'low';
 
-export type IconMatchSource = 'priority' | 'full';
+export type IconMatchSource = 'priority' | 'description';
 
 export interface Classification {
   /** When true, route to the LLM SVG author; otherwise to the builder. */
@@ -365,46 +365,130 @@ function iconHintSatisfied(req: TagRequest, match: IconMatch): boolean {
   return match.matchedTerms.some((term) => hintTokens.has(term));
 }
 
-function buildMatchHaystacks(req: TagRequest): { priority: string; full: string } {
+/** Jira form fields and revision notes — weighted above the free-text description. */
+function buildMatchHaystacks(req: TagRequest): { priority: string; description: string } {
   const revision = req.revisionNotes?.trim();
   const iconHint = req.iconHint ? iconMatchText(req.iconHint) : undefined;
   const cleanedRevision = revision ? iconMatchText(revision) : undefined;
   const cleanedDescription = iconMatchText(req.description);
   const cleanedTagName = iconMatchText(req.tagName);
   const priority = [iconHint, cleanedTagName, cleanedRevision].filter(Boolean).join('\n');
-  const full = priority
-    ? `${priority}\n${cleanedDescription}`
-    : [cleanedTagName, cleanedDescription, cleanedRevision].filter(Boolean).join('\n');
-  return { priority, full };
+  return { priority, description: cleanedDescription };
 }
 
-function pickIconMatch(
-  req: TagRequest,
+function rankIconMatchInRegistry(
+  hay: string,
   registry: IconDef[],
-): { match: IconMatch; ranked: IconMatch[]; source: IconMatchSource } | null {
-  const { priority, full } = buildMatchHaystacks(req);
-  const hay = req.iconHint?.trim() ? priority : full;
-
+): { match: IconMatch; ranked: IconMatch[] } | null {
   const curated = registry.filter((icon) => !isNucleoIconId(icon.id));
   const nucleo = registry.filter((icon) => isNucleoIconId(icon.id));
 
   const curatedRanked = rankIconMatches(hay, curated);
   if (curatedRanked[0]) {
-    return {
-      match: curatedRanked[0],
-      ranked: curatedRanked,
-      source: req.iconHint?.trim() ? 'priority' : 'full',
-    };
+    return { match: curatedRanked[0], ranked: curatedRanked };
   }
 
   const nucleoRanked = rankIconMatches(hay, nucleo);
   if (!nucleoRanked[0]) return null;
 
-  return {
-    match: nucleoRanked[0],
-    ranked: nucleoRanked,
-    source: req.iconHint?.trim() ? 'priority' : 'full',
-  };
+  return { match: nucleoRanked[0], ranked: nucleoRanked };
+}
+
+/**
+ * Match a library icon. Form fields (icon hint, tag name, revision) are tried
+ * first; the free-text description is only consulted when they yield no match.
+ */
+function pickIconMatch(
+  req: TagRequest,
+  registry: IconDef[],
+): { match: IconMatch; ranked: IconMatch[]; source: IconMatchSource } | null {
+  const { priority, description } = buildMatchHaystacks(req);
+
+  if (priority) {
+    const fromFields = rankIconMatchInRegistry(priority, registry);
+    if (fromFields) {
+      return { ...fromFields, source: 'priority' };
+    }
+  }
+
+  if (description) {
+    const fromDescription = rankIconMatchInRegistry(description, registry);
+    if (fromDescription) {
+      return { ...fromDescription, source: 'description' };
+    }
+  }
+
+  return null;
+}
+
+const LETTERS_AFTER_INTENT =
+  /\b(?:letters?|initials?|text|abbreviation|monogram|acronym)\s+["'\u2018\u2019\u201c\u201d]?([A-Za-z0-9.]{1,3})["'\u2018\u2019\u201c\u201d]?\b/i;
+
+const QUOTED_SHORT_TEXT =
+  /["'\u2018\u2019\u201c\u201d]\s*([A-Za-z0-9.]{1,3})\s*["'\u2018\u2019\u201c\u201d]/;
+
+interface ParsedLetters {
+  text: string;
+}
+
+/** Parse an explicit 1-3 character letter request from a single text blob. */
+function parseExplicitLetters(text: string): ParsedLetters | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const afterIntent = trimmed.match(LETTERS_AFTER_INTENT);
+  if (afterIntent) {
+    const normalized = normalizeTextToken(afterIntent[1]);
+    return normalized ? { text: normalized } : null;
+  }
+
+  const quoted = trimmed.match(QUOTED_SHORT_TEXT);
+  if (quoted) {
+    const normalized = normalizeTextToken(quoted[1]);
+    return normalized ? { text: normalized } : null;
+  }
+
+  return null;
+}
+
+interface LetterExtraction {
+  text: string;
+  source: string;
+  confidence: Confidence;
+}
+
+/**
+ * Extract requested letter content. Form fields are checked before the
+ * description so studio names in the brief cannot override the ticket form.
+ */
+function extractRequestedLetters(req: TagRequest): LetterExtraction | null {
+  const ordered: [string, string][] = [
+    ['icon hint', req.iconHint ?? ''],
+    ['tag name', req.tagName],
+    ['revision notes', req.revisionNotes ?? ''],
+    ['description', req.description],
+  ];
+
+  for (const [source, text] of ordered) {
+    const parsed = parseExplicitLetters(text);
+    if (parsed) {
+      return { text: parsed.text, source, confidence: 'high' };
+    }
+  }
+
+  const formHay = [req.iconHint, req.tagName, req.revisionNotes].filter(Boolean).join('\n');
+  if (LETTERS_INTENT.test(formHay) || LETTERS_INTENT.test(req.description)) {
+    const fuzzy = normalizeTextToken(req.tagName.slice(0, 3));
+    if (fuzzy) {
+      return {
+        text: fuzzy,
+        source: 'tag name',
+        confidence: 'low',
+      };
+    }
+  }
+
+  return null;
 }
 
 interface ConfidenceAssessment {
@@ -468,6 +552,10 @@ function assessIconConfidence(
   const matchedTermSet = new Set(match.matchedTerms);
   const iconKeywords = allIconKeywords(match.icon);
   const lowSignals: string[] = [];
+
+  if (source === 'description') {
+    lowSignals.push('matched from description only (form fields did not match)');
+  }
 
   if (GENERIC_ICON_IDS.has(match.icon.id) && !strongCuratedIntent(match, req)) {
     lowSignals.push('generic library icon');
@@ -534,9 +622,12 @@ function highTextClassification(
 /**
  * Classify a tag request as simple (builder) or complex (LLM SVG).
  *
- * Order: explicit short text -> library icon match -> letters intent -> complex.
- * When an icon hint is present, only the hint and tag name are used for icon
- * matching so studio names in the description cannot misroute the request.
+ * Order: explicit icon id -> tag-name initialism -> letters from form fields ->
+ * library icon match (form fields, then description) -> letters from description ->
+ * complex.
+ *
+ * Jira form fields (tag name, icon hint) and revision notes outrank the free-text
+ * description for both letter extraction and icon matching.
  */
 export function classify(req: TagRequest, registry: IconDef[]): Classification {
   if (req.explicitIconId) {
@@ -554,17 +645,6 @@ export function classify(req: TagRequest, registry: IconDef[]): Classification {
     }
   }
 
-  const { priority, full } = buildMatchHaystacks(req);
-  const hay = req.iconHint?.trim() ? priority : full;
-
-  const quoted = hay.match(/["'\u2018\u2019\u201c\u201d]\s*([A-Za-z0-9.]{1,3})\s*["'\u2018\u2019\u201c\u201d]/);
-  if (quoted) {
-    const text = normalizeTextToken(quoted[1]);
-    if (text) {
-      return highTextClassification(text, `Quoted short text "${text}".`);
-    }
-  }
-
   if (/^[A-Z0-9.]{1,3}$/.test(req.tagName.trim())) {
     const text = normalizeTextToken(req.tagName);
     if (text) {
@@ -573,6 +653,14 @@ export function classify(req: TagRequest, registry: IconDef[]): Classification {
         `Tag name is a ${text.length}-char initialism.`,
       );
     }
+  }
+
+  const letters = extractRequestedLetters(req);
+  if (letters && letters.confidence === 'high') {
+    return highTextClassification(
+      letters.text,
+      `Letters/initials requested in ${letters.source} ("${letters.text}").`,
+    );
   }
 
   const picked = pickIconMatch(req, registry);
@@ -592,28 +680,15 @@ export function classify(req: TagRequest, registry: IconDef[]): Classification {
     };
   }
 
-  if (LETTERS_INTENT.test(hay)) {
-    const tok = req.description.match(/\b([A-Za-z0-9.]{1,3})\b/);
-    if (tok) {
-      const text = normalizeTextToken(tok[1]);
-      if (text) {
-        return highTextClassification(
-          text,
-          `Letters/initials requested ("${text}").`,
-        );
-      }
-    }
-    const fuzzy = normalizeTextToken(req.tagName.slice(0, 3));
-    if (fuzzy) {
-      return {
-        isComplex: false,
-        mode: 'text',
-        text: fuzzy,
-        confidence: 'low',
-        fallbackToAi: true,
-        reason: `Letters intent with inferred text "${fuzzy}" (low confidence).`,
-      };
-    }
+  if (letters) {
+    return {
+      isComplex: false,
+      mode: 'text',
+      text: letters.text,
+      confidence: 'low',
+      fallbackToAi: true,
+      reason: `Letters/initials requested in ${letters.source} ("${letters.text}") (low confidence).`,
+    };
   }
 
   return {

@@ -203,4 +203,63 @@ describe('classify', () => {
     expect(c.iconId).not.toBe('nucleo-pregnancy-test');
     expect(c.iconId).toMatch(/^nucleo-(earth|globe)/);
   });
+
+  it('routes UTR-97 letters PRO from the icon hint to text mode (not abc-letters)', () => {
+    const c = classify(
+      req({
+        tagName: 'Pro User',
+        iconHint: 'letters PRO',
+        description:
+          'Globo Gym wants a custom user tag with the letters PRO to indicate pro users',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.mode).toBe('text');
+    expect(c.text).toBe('PRO');
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+    expect(c.iconId).toBeUndefined();
+  });
+
+  it('prefers the tag name over description tokens for icon matching', () => {
+    const c = classify(
+      req({
+        tagName: 'Gym Rat',
+        description: 'Average Joes Gym wants a star icon for favorites',
+      }),
+      registry,
+    );
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toBe('dumbbell');
+    expect(c.iconId).not.toBe('star');
+  });
+
+  it('falls back to the description for icon matching when form fields do not match', () => {
+    const c = classify(
+      req({
+        tagName: 'Top Reviewer',
+        description: 'show a star for favorites',
+      }),
+      registry,
+    );
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toBe('star');
+    expect(c.confidence).toBe('low');
+    expect(c.fallbackToAi).toBe(true);
+  });
+
+  it('extracts letters PRO from the description when the form omits them', () => {
+    const c = classify(
+      req({
+        tagName: 'Pro User',
+        description:
+          'Globo Gym wants a custom user tag with the letters PRO to indicate pro users',
+      }),
+      registry,
+    );
+    expect(c.mode).toBe('text');
+    expect(c.text).toBe('PRO');
+    expect(c.confidence).toBe('high');
+  });
 });

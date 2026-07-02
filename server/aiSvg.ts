@@ -103,15 +103,17 @@ function userPrompt(
   validationFeedback: string | null,
 ): string {
   const lines = [
-    `Tag name: ${req.tagName}`,
-    `Brief: ${req.description}`,
-    ...(req.iconHint ? [`Requested icon/visual: ${req.iconHint}`] : []),
+    `Tag name (form field): ${req.tagName}`,
+    ...(req.iconHint ? [`Tag icon / visual (form field): ${req.iconHint}`] : []),
+    `Additional description: ${req.description}`,
     `Background color (use exactly): ${bgHex}`,
     `Foreground color (use exactly for the glyph): ${fgHex}`,
     '',
     'Produce one complete 30x30 SVG: an edge-to-edge background circle',
     `(<circle cx="15" cy="15" r="15" fill="${bgHex}" />) and a single centered,`,
     `monochrome ${fgHex} glyph that represents the brief, fit within 80% width / 72% height.`,
+    '',
+    'Prioritize the tag name and icon form fields over the additional description when they differ.',
   ];
   if (variant && variant.total > 1) {
     lines.push(
