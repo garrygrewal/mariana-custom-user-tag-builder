@@ -262,4 +262,20 @@ describe('classify', () => {
     expect(c.text).toBe('PRO');
     expect(c.confidence).toBe('high');
   });
+
+  it('routes UTR-99 regenerate snake notes to the snake icon, not letters PRO', () => {
+    const c = classify(
+      req({
+        tagName: 'Pro User',
+        iconHint: 'letters PRO',
+        description:
+          'Globo Gym wants a custom user tag with the letters PRO to indicate pro users',
+        revisionNotes: 'use a snake icon instead',
+      }),
+      registry,
+    );
+    expect(c.mode).toBe('icon');
+    expect(c.iconId).toBe('nucleo-snake');
+    expect(c.text).toBeUndefined();
+  });
 });

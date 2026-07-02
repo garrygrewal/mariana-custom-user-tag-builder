@@ -16,9 +16,10 @@ function collectIconCandidates(text: string): string[] {
     candidates.push(normalized);
   };
 
-  const useIcon = text.match(/\buse(?:\s+the)?\s+([a-z0-9][a-z0-9-_]*)\s+icon\b/gi) ?? [];
+  const useIcon =
+    text.match(/\buse(?:\s+(?:a|an|the))?\s+([a-z0-9][a-z0-9-_]*)\s+icon\b/gi) ?? [];
   for (const match of useIcon) {
-    const captured = match.match(/\buse(?:\s+the)?\s+([a-z0-9][a-z0-9-_]*)\s+icon\b/i);
+    const captured = match.match(/\buse(?:\s+(?:a|an|the))?\s+([a-z0-9][a-z0-9-_]*)\s+icon\b/i);
     if (captured?.[1]) add(captured[1]);
   }
 

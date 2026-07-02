@@ -372,7 +372,10 @@ function buildMatchHaystacks(req: TagRequest): { priority: string; description: 
   const cleanedRevision = revision ? iconMatchText(revision) : undefined;
   const cleanedDescription = iconMatchText(req.description);
   const cleanedTagName = iconMatchText(req.tagName);
-  const priority = [iconHint, cleanedTagName, cleanedRevision].filter(Boolean).join('\n');
+  // Designer `/regenerate-tag` notes replace the original icon hint for matching.
+  const priority = cleanedRevision
+    ? [cleanedRevision, cleanedTagName].filter(Boolean).join('\n')
+    : [iconHint, cleanedTagName, cleanedRevision].filter(Boolean).join('\n');
   return { priority, description: cleanedDescription };
 }
 
@@ -460,14 +463,22 @@ interface LetterExtraction {
 /**
  * Extract requested letter content. Form fields are checked before the
  * description so studio names in the brief cannot override the ticket form.
+ * When revision notes are present, only those notes and the tag name are
+ * consulted so a `/regenerate-tag` icon change is not overridden by the
+ * original "letters PRO" form value or description.
  */
 function extractRequestedLetters(req: TagRequest): LetterExtraction | null {
-  const ordered: [string, string][] = [
-    ['icon hint', req.iconHint ?? ''],
-    ['tag name', req.tagName],
-    ['revision notes', req.revisionNotes ?? ''],
-    ['description', req.description],
-  ];
+  const ordered: [string, string][] = req.revisionNotes?.trim()
+    ? [
+        ['revision notes', req.revisionNotes],
+        ['tag name', req.tagName],
+      ]
+    : [
+        ['icon hint', req.iconHint ?? ''],
+        ['tag name', req.tagName],
+        ['revision notes', req.revisionNotes ?? ''],
+        ['description', req.description],
+      ];
 
   for (const [source, text] of ordered) {
     const parsed = parseExplicitLetters(text);
@@ -476,8 +487,13 @@ function extractRequestedLetters(req: TagRequest): LetterExtraction | null {
     }
   }
 
-  const formHay = [req.iconHint, req.tagName, req.revisionNotes].filter(Boolean).join('\n');
-  if (LETTERS_INTENT.test(formHay) || LETTERS_INTENT.test(req.description)) {
+  const formHay = req.revisionNotes?.trim()
+    ? [req.revisionNotes, req.tagName].filter(Boolean).join('\n')
+    : [req.iconHint, req.tagName, req.revisionNotes].filter(Boolean).join('\n');
+  const lettersHay = req.revisionNotes?.trim()
+    ? formHay
+    : `${formHay}\n${req.description}`;
+  if (LETTERS_INTENT.test(lettersHay)) {
     const fuzzy = normalizeTextToken(req.tagName.slice(0, 3));
     if (fuzzy) {
       return {

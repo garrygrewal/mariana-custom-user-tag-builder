@@ -32,6 +32,11 @@ describe('applyRevisionNotes', () => {
     expect(updated.bgHex).toBe(applyShadeModifier('#EC4899', 'pastel'));
   });
 
+  it('forces an explicit icon id from use-a-icon phrasing', () => {
+    const updated = applyRevisionNotes(baseReq, 'use a snake icon instead');
+    expect(updated.explicitIconId).toBe('nucleo-snake');
+  });
+
   it('overrides color for multi-tag requests when notes include a color', () => {
     const multi: TagRequest = {
       ...baseReq,

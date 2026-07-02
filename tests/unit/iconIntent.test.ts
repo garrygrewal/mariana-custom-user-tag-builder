@@ -25,4 +25,8 @@ describe('resolveExplicitIconId', () => {
   it('returns null when no registered icon matches', () => {
     expect(resolveExplicitIconId('use the made-up-icon icon', registry)).toBeNull();
   });
+
+  it('resolves use-a-icon phrasing with an article', () => {
+    expect(resolveExplicitIconId('use a snake icon instead', registry)).toBe('nucleo-snake');
+  });
 });
