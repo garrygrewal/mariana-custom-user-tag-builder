@@ -1,7 +1,7 @@
 import type { IconDef } from '../src/types.js';
 import { TEXT_MAX_LENGTH } from '../src/constants.js';
 import { isNucleoIconId } from './nucleoIcons.node.js';
-import { iconMatchText } from './iconIntent.js';
+import { iconMatchText, revisionNotesChangeIcon } from './iconIntent.js';
 import type { TagRequest } from './ticket.js';
 
 export type Confidence = 'high' | 'low';
@@ -366,14 +366,17 @@ function iconHintSatisfied(req: TagRequest, match: IconMatch): boolean {
 }
 
 /** Jira form fields and revision notes — weighted above the free-text description. */
-function buildMatchHaystacks(req: TagRequest): { priority: string; description: string } {
+function buildMatchHaystacks(
+  req: TagRequest,
+  registry: IconDef[],
+): { priority: string; description: string } {
   const revision = req.revisionNotes?.trim();
   const iconHint = req.iconHint ? iconMatchText(req.iconHint) : undefined;
   const cleanedRevision = revision ? iconMatchText(revision) : undefined;
   const cleanedDescription = iconMatchText(req.description);
   const cleanedTagName = iconMatchText(req.tagName);
-  // Designer `/regenerate-tag` notes replace the original icon hint for matching.
-  const priority = cleanedRevision
+  const replaceIconHint = revision != null && revisionNotesChangeIcon(revision, registry);
+  const priority = replaceIconHint
     ? [cleanedRevision, cleanedTagName].filter(Boolean).join('\n')
     : [iconHint, cleanedTagName, cleanedRevision].filter(Boolean).join('\n');
   return { priority, description: cleanedDescription };
@@ -405,7 +408,7 @@ function pickIconMatch(
   req: TagRequest,
   registry: IconDef[],
 ): { match: IconMatch; ranked: IconMatch[]; source: IconMatchSource } | null {
-  const { priority, description } = buildMatchHaystacks(req);
+  const { priority, description } = buildMatchHaystacks(req, registry);
 
   if (priority) {
     const fromFields = rankIconMatchInRegistry(priority, registry);
@@ -463,14 +466,19 @@ interface LetterExtraction {
 /**
  * Extract requested letter content. Form fields are checked before the
  * description so studio names in the brief cannot override the ticket form.
- * When revision notes are present, only those notes and the tag name are
- * consulted so a `/regenerate-tag` icon change is not overridden by the
- * original "letters PRO" form value or description.
+ * When revision notes change the icon brief, only those notes and the tag name
+ * are consulted so a `/regenerate-tag` icon change is not overridden by the
+ * original "letters PRO" form value or description. Color-only revision notes
+ * preserve the original icon hint and description.
  */
-function extractRequestedLetters(req: TagRequest): LetterExtraction | null {
-  const ordered: [string, string][] = req.revisionNotes?.trim()
+function extractRequestedLetters(req: TagRequest, registry: IconDef[]): LetterExtraction | null {
+  const restrictToRevision =
+    req.revisionNotes?.trim() != null &&
+    revisionNotesChangeIcon(req.revisionNotes!.trim(), registry);
+
+  const ordered: [string, string][] = restrictToRevision
     ? [
-        ['revision notes', req.revisionNotes],
+        ['revision notes', req.revisionNotes!],
         ['tag name', req.tagName],
       ]
     : [
@@ -487,10 +495,10 @@ function extractRequestedLetters(req: TagRequest): LetterExtraction | null {
     }
   }
 
-  const formHay = req.revisionNotes?.trim()
+  const formHay = restrictToRevision
     ? [req.revisionNotes, req.tagName].filter(Boolean).join('\n')
     : [req.iconHint, req.tagName, req.revisionNotes].filter(Boolean).join('\n');
-  const lettersHay = req.revisionNotes?.trim()
+  const lettersHay = restrictToRevision
     ? formHay
     : `${formHay}\n${req.description}`;
   if (LETTERS_INTENT.test(lettersHay)) {
@@ -671,7 +679,7 @@ export function classify(req: TagRequest, registry: IconDef[]): Classification {
     }
   }
 
-  const letters = extractRequestedLetters(req);
+  const letters = extractRequestedLetters(req, registry);
   if (letters && letters.confidence === 'high') {
     return highTextClassification(
       letters.text,

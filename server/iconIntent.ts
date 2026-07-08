@@ -1,5 +1,21 @@
 import type { IconDef } from '../src/types.js';
-import { stripColorLanguage } from './colors.js';
+import { extractColor, stripColorLanguage } from './colors.js';
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Jira order-form field labels that should not participate in icon matching. */
+const JIRA_FIELD_LABELS = [
+  'user tag name',
+  'tag name',
+  'background color',
+  'tag color',
+  'number of tags',
+  'number of icons',
+  'description',
+  'icon',
+] as const;
 
 function normalizeIconToken(token: string): string {
   return token.trim().toLowerCase().replace(/_/g, '-');
@@ -71,8 +87,59 @@ export function resolveExplicitIconId(
 }
 
 /**
- * Text suitable for fuzzy icon matching after removing color instructions.
+ * Remove Jira order-form field labels (e.g. "Description:") so label words do
+ * not spuriously match library icon keywords.
+ */
+export function stripJiraBoilerplate(text: string): string {
+  let out = text;
+  for (const label of JIRA_FIELD_LABELS) {
+    const escaped = escapeRegExp(label);
+    out = out.replace(
+      new RegExp(`(^|[\\n\\r])\\s*${escaped}\\s*:\\s*`, 'gi'),
+      '$1',
+    );
+    out = out.replace(new RegExp(`^\\s*${escaped}\\s*:\\s*`, 'gi'), '');
+  }
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+const LETTER_REVISION =
+  /\b(?:letters?|initials?|monogram|acronym|abbreviation)\s+["'\u2018\u2019\u201c\u201d]?[A-Za-z0-9.]{1,3}/i;
+const QUOTED_LETTER_REVISION =
+  /["'\u2018\u2019\u201c\u201d]\s*[A-Za-z0-9.]{1,3}\s*["'\u2018\u2019\u201c\u201d]/;
+
+/**
+ * True when `/regenerate-tag` notes change the icon or letter brief, not just
+ * the background color. Color-only notes should preserve the original icon hint.
+ */
+export function revisionNotesChangeIcon(notes: string, registry: IconDef[]): boolean {
+  const trimmed = notes.trim();
+  if (!trimmed) return false;
+
+  if (resolveExplicitIconId(trimmed, registry)) return true;
+  if (LETTER_REVISION.test(trimmed)) return true;
+  if (QUOTED_LETTER_REVISION.test(trimmed)) return true;
+  if (/\b(?:icon|logo|emoji|glyph|symbol|silhouette)\b/i.test(trimmed)) return true;
+  if (/\b(?:instead|rather|replace|switch)\b/i.test(trimmed)) return true;
+
+  const afterColor = stripColorLanguage(trimmed);
+  const afterFiller = afterColor
+    .replace(
+      /\b(?:should|be|the|please|make|set|change|tag|use|a|an|to|it|instead|simpler|different)\b/gi,
+      ' ',
+    )
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (extractColor(trimmed).matched && afterFiller.length === 0) return false;
+
+  return afterFiller.length > 0;
+}
+
+/**
+ * Text suitable for fuzzy icon matching after removing color instructions and
+ * Jira field labels.
  */
 export function iconMatchText(text: string): string {
-  return stripColorLanguage(text);
+  return stripColorLanguage(stripJiraBoilerplate(text));
 }

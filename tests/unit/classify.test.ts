@@ -278,4 +278,35 @@ describe('classify', () => {
     expect(c.iconId).toBe('nucleo-snake');
     expect(c.text).toBeUndefined();
   });
+
+  it('preserves TP letters on UTR-103 color-only regenerate', () => {
+    const c = classify(
+      req({
+        tagName: 'Totalpass',
+        iconHint: 'TP (White)',
+        description:
+          'User Tag Name: Totalpass\nDescription: This is a Totalpass reservation.\nBackground Color: Green\nIcon: Letters "TP" (white)',
+        revisionNotes: 'color should be green',
+      }),
+      registry,
+    );
+    expect(c.mode).toBe('text');
+    expect(c.text).toBe('TP');
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('does not match audio-description from the Description field label', () => {
+    const c = classify(
+      req({
+        tagName: 'Totalpass',
+        iconHint: 'TP (White)',
+        description:
+          'User Tag Name: Totalpass\nDescription: This is a Totalpass reservation.\nBackground Color: Green\nIcon: Letters "TP" (white)',
+        revisionNotes: 'color should be green',
+      }),
+      registry,
+    );
+    expect(c.iconId).not.toBe('nucleo-audio-description');
+  });
 });
