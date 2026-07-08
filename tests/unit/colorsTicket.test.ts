@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { extractColor, normalizeHex, DEFAULT_BG_HEX, applyShadeModifier } from '../../server/colors';
+import { extractColor, normalizeHex, DEFAULT_BG_HEX, applyShadeModifier, splitColorSpecs, sanitizeBgHex } from '../../server/colors';
 import {
   parseTicket,
   adfToText,
   splitConjoinedSpecs,
+  splitListSpecs,
   parseSpecSegment,
   type JiraIssue,
 } from '../../server/ticket';
+import { classify } from '../../server/classify';
+import { loadIconRegistry } from '../../server/icons.node';
 
 describe('normalizeHex', () => {
   it('expands shorthand and uppercases', () => {
@@ -58,6 +61,17 @@ describe('extractColor', () => {
     const r = extractColor('darker blue');
     expect(r.matched).toBe(true);
     expect(r.hex).toBe(applyShadeModifier('#2D6CDF', 'darker'));
+  });
+
+  it('treats "black and white" as a single black background style', () => {
+    const r = extractColor('black and white');
+    expect(r).toMatchObject({ hex: '#000000', matched: true, source: 'name' });
+  });
+
+  it('rejects white as a tag background', () => {
+    expect(extractColor('white')).toMatchObject({ hex: '#000000', matched: true });
+    expect(extractColor('#FFFFFF')).toMatchObject({ hex: '#000000', matched: true });
+    expect(sanitizeBgHex('#FFFFFF')).toBe('#000000');
   });
 });
 
@@ -187,11 +201,82 @@ describe('parseTicket', () => {
       colorMatched: true,
     });
   });
+
+  it('parses UTR-102 as two number tags with shared black background', () => {
+    const issue: JiraIssue = {
+      key: 'UTR-102',
+      fields: {
+        summary: 'Custom User Tag',
+        description:
+          'Studio: Recoil Bungee Fitness ID: 7010\n\nwould like a tag for the numbers 16 and 17. Please have them the same colour and style as the standard number user tags.',
+        customfield_10306: 'black and white',
+        customfield_10307: '16, 17',
+        customfield_10309: '16 and 17',
+        customfield_10416: 2,
+      },
+    };
+    const req = parseTicket(issue, {
+      tagName: 'customfield_10307',
+      color: 'customfield_10306',
+      count: 'customfield_10416',
+      icon: 'customfield_10309',
+    });
+
+    expect(req.count).toBe(2);
+    expect(req.bgHex).toBe('#000000');
+    expect(req.variants).toHaveLength(2);
+    expect(req.variants![0]).toMatchObject({
+      label: '16',
+      iconHint: '16',
+      bgHex: '#000000',
+      colorMatched: true,
+    });
+    expect(req.variants![1]).toMatchObject({
+      label: '17',
+      iconHint: '17',
+      bgHex: '#000000',
+      colorMatched: true,
+    });
+
+    const registry = loadIconRegistry();
+    for (const variant of req.variants!) {
+      const c = classify(
+        {
+          ...req,
+          tagName: variant.label,
+          iconHint: variant.iconHint,
+          bgHex: variant.bgHex,
+          count: 1,
+          variants: undefined,
+        },
+        registry,
+      );
+      expect(c).toMatchObject({
+        isComplex: false,
+        mode: 'text',
+        text: variant.label,
+        confidence: 'high',
+      });
+    }
+  });
 });
 
 describe('parseTagVariants helpers', () => {
   it('splits conjoined specs on "and"', () => {
     expect(splitConjoinedSpecs('green for good and red for bad')).toEqual([
+      'green for good',
+      'red for bad',
+    ]);
+  });
+
+  it('splits comma-separated short tokens', () => {
+    expect(splitListSpecs('16, 17')).toEqual(['16', '17']);
+    expect(splitListSpecs('16 and 17')).toEqual(['16', '17']);
+  });
+
+  it('does not split "black and white" into two colors', () => {
+    expect(splitColorSpecs('black and white')).toEqual(['black and white']);
+    expect(splitColorSpecs('green for good and red for bad')).toEqual([
       'green for good',
       'red for bad',
     ]);

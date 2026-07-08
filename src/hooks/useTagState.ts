@@ -6,6 +6,7 @@ import {
   CONTRAST_THRESHOLD_BG_WHITE,
 } from '../constants';
 import { contrastRatio, pickForeground } from '../lib/contrast';
+import { sanitizeBgHex } from '../lib/bgColor';
 import { buildFileName } from '../lib/slugify';
 
 export type TagAction =
@@ -27,7 +28,7 @@ const initialState: TagConfig = {
 function reducer(state: TagConfig, action: TagAction): TagConfig {
   switch (action.type) {
     case 'SET_BG_HEX':
-      return { ...state, bgHex: action.payload };
+      return { ...state, bgHex: sanitizeBgHex(action.payload) };
     case 'SET_MODE':
       return { ...state, mode: action.payload };
     case 'SET_TEXT': {

@@ -133,7 +133,7 @@ test.describe('Accessibility', () => {
     await page.goto('/');
 
     // Set a very light background to trigger bg-vs-white warning
-    await page.fill('[aria-label="Hex color code"]', '#FFFFFF');
+    await page.fill('[aria-label="Hex color code"]', '#F0F0F0');
 
     const warningRegion = page.locator('[aria-live="polite"]');
     await expect(warningRegion).toBeVisible();

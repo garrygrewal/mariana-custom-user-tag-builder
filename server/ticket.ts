@@ -1,4 +1,4 @@
-import { extractColor } from './colors.js';
+import { extractColor, sanitizeBgHex, splitColorSpecs } from './colors.js';
 import { resolveExplicitIconId } from './iconIntent.js';
 import { loadIconRegistry } from './icons.node.js';
 
@@ -123,6 +123,37 @@ export function splitConjoinedSpecs(text: string): string[] {
     .filter(Boolean);
 }
 
+/** True when a segment is a short token (e.g. "16", "TP") suitable for list splitting. */
+function isSimpleListItem(segment: string): boolean {
+  const value = parseSpecSegment(segment).value.trim();
+  return /^[A-Za-z0-9.]{1,3}$/.test(value);
+}
+
+/**
+ * Split multi-tag form values on "and" and, when present, commas between short
+ * tokens (e.g. "16, 17" or "16 and 17").
+ */
+export function splitListSpecs(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+
+  const andParts = splitConjoinedSpecs(trimmed);
+  if (andParts.length > 1) return andParts;
+
+  const single = andParts[0] ?? trimmed;
+  if (!single.includes(',')) return andParts.length ? andParts : [trimmed];
+
+  const commaParts = single
+    .split(',')
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  if (commaParts.length > 1 && commaParts.every(isSimpleListItem)) {
+    return commaParts;
+  }
+
+  return andParts.length ? andParts : [trimmed];
+}
+
 /** Parse "smiling emoji for the good tag" into value + optional qualifier. */
 export function parseSpecSegment(segment: string): SpecSegment {
   const forTag = segment.match(/^(.+?)\s+for\s+(?:the\s+)?(.+?)(?:\s+tag)?\.?$/i);
@@ -142,7 +173,15 @@ function variantLabelFrom(
   tagName: string,
   index: number,
   count: number,
+  iconHint?: string,
 ): string {
+  if (!qualifier && iconHint) {
+    const token = iconHint.trim();
+    if (/^[A-Za-z0-9.]{1,3}$/.test(token)) {
+      return token.toUpperCase();
+    }
+  }
+
   if (qualifier) {
     const parts = splitConjoinedSpecs(tagName);
     if (parts.length === 2) {
@@ -216,12 +255,17 @@ export function parseTagVariants(
 ): TagVariant[] | undefined {
   if (count <= 1) return undefined;
 
-  const iconParts = iconField ? splitConjoinedSpecs(iconField).map(parseSpecSegment) : [];
+  const iconParts = iconField ? splitListSpecs(iconField).map(parseSpecSegment) : [];
   const colorParts: ColorSpecSegment[] = colorField
-    ? splitConjoinedSpecs(colorField).map((segment) => {
+    ? splitColorSpecs(colorField).map((segment) => {
         const { value, qualifier } = parseSpecSegment(segment);
         const color = extractColor(value);
-        return { value, qualifier, hex: color.hex, matched: color.matched };
+        return {
+          value,
+          qualifier,
+          hex: sanitizeBgHex(color.hex),
+          matched: color.matched,
+        };
       })
     : [];
 
@@ -243,7 +287,7 @@ export function parseTagVariants(
       slots.push({
         qualifier: icon.qualifier,
         iconHint: icon.value,
-        bgHex: color?.hex ?? fallbackHex,
+        bgHex: sanitizeBgHex(color?.hex ?? fallbackHex),
         colorMatched: color?.matched ?? fallbackColorMatched,
       });
     }
@@ -254,7 +298,7 @@ export function parseTagVariants(
       slots.push({
         qualifier: color.qualifier ?? icon?.qualifier,
         iconHint: icon?.value,
-        bgHex: color.hex,
+        bgHex: sanitizeBgHex(color.hex),
         colorMatched: color.matched,
       });
     }
@@ -265,16 +309,16 @@ export function parseTagVariants(
       slots.push({
         qualifier: icon?.qualifier ?? color?.qualifier,
         iconHint: icon?.value,
-        bgHex: color?.hex ?? fallbackHex,
+        bgHex: sanitizeBgHex(color?.hex ?? fallbackHex),
         colorMatched: color?.matched ?? fallbackColorMatched,
       });
     }
   }
 
   return slots.map((slot, index) => ({
-    label: variantLabelFrom(slot.qualifier, tagName, index, count),
+    label: variantLabelFrom(slot.qualifier, tagName, index, count, slot.iconHint),
     iconHint: slot.iconHint,
-    bgHex: slot.bgHex,
+    bgHex: sanitizeBgHex(slot.bgHex),
     colorMatched: slot.colorMatched,
   }));
 }
@@ -326,7 +370,7 @@ export function parseTicket(issue: JiraIssue, fieldMap: FieldMap = {}): TagReque
   return {
     issueKey: issue.key,
     tagName,
-    bgHex: color.hex,
+    bgHex: sanitizeBgHex(color.hex),
     colorMatched: color.matched,
     count,
     description,
@@ -356,12 +400,12 @@ export function applyRevisionNotes(req: TagRequest, revisionNotes: string): TagR
 
   const color = extractColor(trimmed);
   if (color.matched) {
-    updated.bgHex = color.hex;
+    updated.bgHex = sanitizeBgHex(color.hex);
     updated.colorMatched = true;
     if (updated.variants?.length) {
       updated.variants = updated.variants.map((variant) => ({
         ...variant,
-        bgHex: color.hex,
+        bgHex: sanitizeBgHex(color.hex),
         colorMatched: true,
       }));
     }

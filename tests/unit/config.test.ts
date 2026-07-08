@@ -11,12 +11,12 @@ describe('parseReviewMentionsEnv', () => {
   it('parses colon-style account ids with @ display names', () => {
     expect(
       parseReviewMentionsEnv(
-        '712020:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:@Kendall Jackson',
+        '712020:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:@Garry Grewal',
       ),
     ).toEqual([
       {
         accountId: '712020:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-        text: '@Kendall Jackson',
+        text: '@Garry Grewal',
       },
     ]);
   });
@@ -24,14 +24,11 @@ describe('parseReviewMentionsEnv', () => {
   it('parses multiple comma-separated mentions', () => {
     expect(
       parseReviewMentionsEnv(
-        '62e93effd49df231b6275f47:@Mackenzie Knight,712020:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee:@Kendall Jackson',
+        '6345fbb13f4224a46db27e59:@Garry Grewal,62e93effd49df231b6275f47:@Mackenzie Knight',
       ),
     ).toEqual([
+      { accountId: '6345fbb13f4224a46db27e59', text: '@Garry Grewal' },
       { accountId: '62e93effd49df231b6275f47', text: '@Mackenzie Knight' },
-      {
-        accountId: '712020:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
-        text: '@Kendall Jackson',
-      },
     ]);
   });
 

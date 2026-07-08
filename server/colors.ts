@@ -1,3 +1,7 @@
+import { sanitizeBgHex } from '../src/lib/bgColor.js';
+
+export { sanitizeBgHex, isDisallowedBgHex } from '../src/lib/bgColor.js';
+
 /** Multi-word color phrases checked before single-word names (longest first). */
 const COMPOUND_COLOR_NAMES: [string, string][] = [
   ['sage green', '#9CAF88'],
@@ -80,6 +84,9 @@ type ShadeModifier =
 /** App default; used only when a request omits any recognizable color. */
 export const DEFAULT_BG_HEX = '#6923F4';
 
+/** Standard number-tag style phrases — one background (black), not two colors. */
+const STYLE_BG_PHRASES = ['black and white', 'black & white'];
+
 /** All named color phrases, longest first, for matching and stripping. */
 export function namedColorPhrases(): string[] {
   const compounds = COMPOUND_COLOR_NAMES.map(([name]) => name);
@@ -106,6 +113,30 @@ export function normalizeHex(input: string): string | null {
       .join('');
   }
   return `#${hex.toUpperCase()}`;
+}
+
+/** True when text describes standard black-circle / white-foreground styling. */
+export function isStyleColorPhrase(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  return STYLE_BG_PHRASES.some((phrase) => lower === phrase);
+}
+
+/**
+ * Split a color field into per-tag segments. Style phrases like "black and white"
+ * stay intact; otherwise splits on "and" like icon/color multi-spec fields.
+ */
+export function splitColorSpecs(text: string): string[] {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  if (isStyleColorPhrase(trimmed)) return [trimmed];
+  return trimmed
+    .split(/\band\b/i)
+    .map((segment) => segment.trim().replace(/^[,;]\s*/, '').replace(/[,;]$/, ''))
+    .filter(Boolean);
+}
+
+function finalizeColor(result: ColorResult): ColorResult {
+  return { ...result, hex: sanitizeBgHex(result.hex) };
 }
 
 export interface ColorResult {
@@ -286,33 +317,37 @@ export function stripColorLanguage(text: string): string {
  * else the app default.
  */
 export function extractColor(text: string): ColorResult {
+  if (isStyleColorPhrase(text)) {
+    return finalizeColor({ hex: '#000000', matched: true, source: 'name' });
+  }
+
   const hexMatch = text.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/);
   if (hexMatch) {
     const hex = normalizeHex(hexMatch[0]);
-    if (hex) return { hex, matched: true, source: 'hex' };
+    if (hex) return finalizeColor({ hex, matched: true, source: 'hex' });
   }
 
   const parenthetical = text.match(/\(([^)]+)\)/);
   if (parenthetical?.[1]) {
     const shadedParen = matchShadedColor(parenthetical[1]);
-    if (shadedParen) return { hex: shadedParen.hex, matched: true, source: 'name' };
+    if (shadedParen) return finalizeColor({ hex: shadedParen.hex, matched: true, source: 'name' });
     const namedParen = matchNamedColor(parenthetical[1]);
-    if (namedParen) return { hex: namedParen, matched: true, source: 'name' };
+    if (namedParen) return finalizeColor({ hex: namedParen, matched: true, source: 'name' });
   }
 
   const shaded = matchShadedColor(text);
-  if (shaded) return { hex: shaded.hex, matched: true, source: 'name' };
+  if (shaded) return finalizeColor({ hex: shaded.hex, matched: true, source: 'name' });
 
   const bgPhrase = text.match(/([^,;:\n]+?)\s+background\b/i);
   if (bgPhrase) {
     const shadedBg = matchShadedColor(bgPhrase[1]);
-    if (shadedBg) return { hex: shadedBg.hex, matched: true, source: 'name' };
+    if (shadedBg) return finalizeColor({ hex: shadedBg.hex, matched: true, source: 'name' });
     const hex = matchNamedColor(bgPhrase[1]);
-    if (hex) return { hex, matched: true, source: 'name' };
+    if (hex) return finalizeColor({ hex, matched: true, source: 'name' });
   }
 
   const hex = matchNamedColor(text);
-  if (hex) return { hex, matched: true, source: 'name' };
+  if (hex) return finalizeColor({ hex, matched: true, source: 'name' });
 
-  return { hex: DEFAULT_BG_HEX, matched: false, source: 'default' };
+  return finalizeColor({ hex: DEFAULT_BG_HEX, matched: false, source: 'default' });
 }

@@ -442,6 +442,10 @@ function parseExplicitLetters(text: string): ParsedLetters | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
+  if (/^\d{1,3}$/.test(trimmed)) {
+    return { text: trimmed };
+  }
+
   const afterIntent = trimmed.match(LETTERS_AFTER_INTENT);
   if (afterIntent) {
     const normalized = normalizeTextToken(afterIntent[1]);
