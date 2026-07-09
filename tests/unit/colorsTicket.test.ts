@@ -6,6 +6,8 @@ import {
   splitConjoinedSpecs,
   splitListSpecs,
   parseSpecSegment,
+  parseCommaSeparatedNumbers,
+  isSharedNumberCircleIconHint,
   type JiraIssue,
 } from '../../server/ticket';
 import { classify } from '../../server/classify';
@@ -282,10 +284,108 @@ describe('parseTagVariants helpers', () => {
     ]);
   });
 
+  it('splits numbered list colors', () => {
+    expect(splitColorSpecs('1) Blue 2) Green 3) Yellow 4) Red 5) purple')).toEqual([
+      'Blue',
+      'Green',
+      'Yellow',
+      'Red',
+      'purple',
+    ]);
+    expect(splitColorSpecs('1. Blue 2. Green')).toEqual(['Blue', 'Green']);
+  });
+
+  it('parses UTR-104 as five distinct number text tags with per-tag colors', () => {
+    const issue: JiraIssue = {
+      key: 'UTR-104',
+      fields: {
+        summary: 'Custom Tag',
+        description:
+          'Revolve Cycle Studio wants to create five custom tags with the numbers in a circle. The color of each circle is as provided in the tag color section and then the fifth one should be different purple from the employee user tag.',
+        customfield_10306: ' 1) Blue 2) Green 3) Yellow 4) Red 5) purple',
+        customfield_10307: '1,2,3,4,5',
+        customfield_10309: 'numbers in a circle',
+        customfield_10416: 5,
+      },
+    };
+    const req = parseTicket(issue, {
+      tagName: 'customfield_10307',
+      color: 'customfield_10306',
+      count: 'customfield_10416',
+      icon: 'customfield_10309',
+    });
+
+    expect(req.count).toBe(5);
+    expect(req.variants).toHaveLength(5);
+    expect(req.variants![0]).toMatchObject({
+      label: '1',
+      iconHint: '1',
+      bgHex: '#2D6CDF',
+      colorMatched: true,
+    });
+    expect(req.variants![1]).toMatchObject({
+      label: '2',
+      iconHint: '2',
+      bgHex: '#3DAE2B',
+      colorMatched: true,
+    });
+    expect(req.variants![2]).toMatchObject({
+      label: '3',
+      iconHint: '3',
+      bgHex: '#FFD200',
+      colorMatched: true,
+    });
+    expect(req.variants![3]).toMatchObject({
+      label: '4',
+      iconHint: '4',
+      bgHex: '#E1251B',
+      colorMatched: true,
+    });
+    expect(req.variants![4]).toMatchObject({
+      label: '5',
+      iconHint: '5',
+      bgHex: '#6923F4',
+      colorMatched: true,
+    });
+
+    const registry = loadIconRegistry();
+    for (const variant of req.variants!) {
+      const c = classify(
+        {
+          ...req,
+          tagName: variant.label,
+          iconHint: variant.iconHint,
+          bgHex: variant.bgHex,
+          count: 1,
+          variants: undefined,
+        },
+        registry,
+      );
+      expect(c).toMatchObject({
+        isComplex: false,
+        mode: 'text',
+        text: variant.label,
+        confidence: 'high',
+      });
+    }
+  });
+
   it('extracts qualifier segments from icon hints', () => {
     expect(parseSpecSegment('smiling emoji for the good tag')).toEqual({
       value: 'smiling emoji',
       qualifier: 'good',
     });
+  });
+
+  it('detects comma-separated number tag names', () => {
+    expect(parseCommaSeparatedNumbers('1,2,3,4,5')).toEqual(['1', '2', '3', '4', '5']);
+    expect(parseCommaSeparatedNumbers('16, 17')).toEqual(['16', '17']);
+    expect(parseCommaSeparatedNumbers('good and bad')).toBeNull();
+  });
+
+  it('detects shared number-in-circle icon hints', () => {
+    expect(isSharedNumberCircleIconHint('numbers in a circle')).toBe(true);
+    expect(isSharedNumberCircleIconHint('number in circle')).toBe(true);
+    expect(isSharedNumberCircleIconHint('Lululemon logo')).toBe(false);
   });
 });

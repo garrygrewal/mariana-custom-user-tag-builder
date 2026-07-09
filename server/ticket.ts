@@ -23,7 +23,7 @@ export interface TagRequest {
   bgHex: string;
   /** True when the color was explicitly stated on the ticket. */
   colorMatched: boolean;
-  /** Number of tags requested (1-4 per the order form). */
+  /** Number of tags requested (1-5 per the order form). */
   count: number;
   /** Free-text brief describing the desired tag. */
   description: string;
@@ -93,13 +93,13 @@ function extractCount(text: string): number {
     /(?:number\s+of\s+(?:tags?|icons?)|total\s+(?:#?\s*of\s+)?(?:tags?|icons?)|tags?|icons?|quantity|qty|count)\D{0,12}?(\d+)/i,
   );
   const n = m ? Number(m[1]) : NaN;
-  if (Number.isFinite(n) && n >= 1 && n <= 4) return n;
+  if (Number.isFinite(n) && n >= 1 && n <= 5) return n;
   return 1;
 }
 
 function parseCountField(value: string): number | null {
   const direct = Number(value);
-  if (Number.isFinite(direct) && direct >= 1 && direct <= 4) return direct;
+  if (Number.isFinite(direct) && direct >= 1 && direct <= 5) return direct;
   return extractCount(`count ${value}`);
 }
 
@@ -220,6 +220,21 @@ function variantLabelFrom(
   return count > 1 ? `${tagName} (${index + 1})` : tagName;
 }
 
+const SHARED_NUMBER_CIRCLE_ICON =
+  /\bnumbers?\s+in\s+(?:a\s+)?circles?\b/i;
+
+/** Comma- or "and"-separated digit tokens (e.g. "1,2,3,4,5" or "16 and 17"). */
+export function parseCommaSeparatedNumbers(text: string): string[] | null {
+  const parts = splitListSpecs(text).map((segment) => parseSpecSegment(segment).value.trim());
+  if (parts.length <= 1) return null;
+  if (!parts.every((part) => /^\d{1,3}$/.test(part))) return null;
+  return parts;
+}
+
+export function isSharedNumberCircleIconHint(iconField: string): boolean {
+  return SHARED_NUMBER_CIRCLE_ICON.test(iconField.trim());
+}
+
 function resolveSpecSegment<T extends SpecSegment>(
   parts: T[],
   index: number,
@@ -255,7 +270,18 @@ export function parseTagVariants(
 ): TagVariant[] | undefined {
   if (count <= 1) return undefined;
 
-  const iconParts = iconField ? splitListSpecs(iconField).map(parseSpecSegment) : [];
+  let iconParts = iconField ? splitListSpecs(iconField).map(parseSpecSegment) : [];
+  const tagNumbers = parseCommaSeparatedNumbers(tagName);
+  if (
+    tagNumbers &&
+    tagNumbers.length === count &&
+    iconField &&
+    isSharedNumberCircleIconHint(iconField) &&
+    iconParts.length <= 1
+  ) {
+    iconParts = tagNumbers.map((value) => ({ value }));
+  }
+
   const colorParts: ColorSpecSegment[] = colorField
     ? splitColorSpecs(colorField).map((segment) => {
         const { value, qualifier } = parseSpecSegment(segment);

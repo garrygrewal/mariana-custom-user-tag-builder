@@ -122,13 +122,31 @@ export function isStyleColorPhrase(text: string): boolean {
 }
 
 /**
+ * Split numbered list colors (e.g. "1) Blue 2) Green" or "1. Blue 2. Green").
+ * Returns null when the text does not look like a numbered color list.
+ */
+export function splitNumberedColorSpecs(text: string): string[] | null {
+  const trimmed = text.trim();
+  const matches = [...trimmed.matchAll(/\d+[\).]\s*([\s\S]+?)(?=\s*\d+[\).]|$)/gi)];
+  if (matches.length < 2) return null;
+
+  const segments = matches.map((match) => match[1].trim()).filter(Boolean);
+  return segments.length >= 2 ? segments : null;
+}
+
+/**
  * Split a color field into per-tag segments. Style phrases like "black and white"
- * stay intact; otherwise splits on "and" like icon/color multi-spec fields.
+ * stay intact; numbered lists (1) Blue 2) Green) and "and"-joined specs are
+ * supported.
  */
 export function splitColorSpecs(text: string): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
   if (isStyleColorPhrase(trimmed)) return [trimmed];
+
+  const numbered = splitNumberedColorSpecs(trimmed);
+  if (numbered) return numbered;
+
   return trimmed
     .split(/\band\b/i)
     .map((segment) => segment.trim().replace(/^[,;]\s*/, '').replace(/[,;]$/, ''))
