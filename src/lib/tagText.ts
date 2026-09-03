@@ -1,4 +1,4 @@
-import { TEXT_MAX_LENGTH } from '../constants';
+import { TEXT_MAX_LENGTH } from '../constants.js';
 
 /**
  * Allowed tag-text characters after uppercasing.
