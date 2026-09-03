@@ -32,8 +32,10 @@ Tek Admin and the Business app. It must read clearly at ~16-30px.
 
 ## Text tags
 
-- Use when the tag content is **letters and/or digits only**, up to **3 characters**.
-- Allowed characters: `A-Z`, `0-9`, and `.` — uppercased.
+- Use when the tag content is **letters, digits, and/or basic punctuation**,
+  up to **3 characters**.
+- Allowed characters: `A-Z`, `0-9`, and punctuation such as `. < > + / %`.
+  Input is uppercased.
 - Font is **Proxima Nova ExtraBold** (weight 800). Text is converted to vector
   outlines on export so it renders identically without the font installed.
 - Sizing is fit-to-width by character count (1 char largest, 3 chars smallest);
@@ -63,7 +65,7 @@ Tek Admin and the Business app. It must read clearly at ~16-30px.
 
 **Simple** (route to the builder, no LLM artwork):
 
-- Content is letters/digits only (<= 3 chars) -> **text mode**.
+- Content is letters/digits/punctuation only (<= 3 chars) -> **text mode**.
 - The requested concept maps to an icon already in the library (`icons/*.svg`)
   by id, label, or an obvious synonym -> **icon mode**.
 

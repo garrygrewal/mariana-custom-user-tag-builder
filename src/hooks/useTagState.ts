@@ -1,13 +1,13 @@
 import { useReducer, useMemo } from 'react';
 import type { TagConfig, TagMode, ContrastWarning, IconDef } from '../types';
 import {
-  TEXT_MAX_LENGTH,
   CONTRAST_THRESHOLD_TEXT,
   CONTRAST_THRESHOLD_BG_WHITE,
 } from '../constants';
 import { contrastRatio, pickForeground } from '../lib/contrast';
 import { sanitizeBgHex } from '../lib/bgColor';
 import { buildFileName } from '../lib/slugify';
+import { sanitizeTagText } from '../lib/tagText';
 
 export type TagAction =
   | { type: 'SET_BG_HEX'; payload: string }
@@ -32,18 +32,17 @@ function reducer(state: TagConfig, action: TagAction): TagConfig {
     case 'SET_MODE':
       return { ...state, mode: action.payload };
     case 'SET_TEXT': {
-      const cleaned = action.payload
-        .toUpperCase()
-        .replace(/[^A-Z0-9.]/g, '')
-        .slice(0, TEXT_MAX_LENGTH);
-      return { ...state, text: cleaned };
+      return { ...state, text: sanitizeTagText(action.payload) };
     }
     case 'SET_ICON_ID':
       return { ...state, iconId: action.payload, uploadedIcon: null };
     case 'SET_UPLOADED_ICON':
       return { ...state, uploadedIcon: action.payload, iconId: '' };
-    default:
+    default: {
+      const _exhaustive: never = action;
+      void _exhaustive;
       return state;
+    }
   }
 }
 

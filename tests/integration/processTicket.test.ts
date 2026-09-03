@@ -50,6 +50,7 @@ class FakeJiraClient implements JiraClientLike {
     fileName: string,
     data: Uint8Array,
     mime: string,
+    _options?: { resolveMediaId?: boolean },
   ): Promise<AttachmentRef> {
     this.attachments.push({ fileName, mime, size: data.byteLength });
     return { id: String(this.attachments.length), filename: fileName, mediaId: `media-${this.attachments.length}` };

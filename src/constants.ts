@@ -2,7 +2,6 @@ export const TAG_DIAMETER = 30;
 export const TAG_RADIUS = TAG_DIAMETER / 2;
 
 export const TEXT_MAX_LENGTH = 3;
-export const TEXT_PATTERN = /^[A-Z0-9.]{0,3}$/;
 
 export const LABEL_MAX_LENGTH = 100;
 

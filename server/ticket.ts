@@ -1,6 +1,7 @@
 import { extractColor, sanitizeBgHex, splitColorSpecs } from './colors.js';
 import { resolveExplicitIconId } from './iconIntent.js';
 import { loadIconRegistry } from './icons.node.js';
+import { isTagText, sanitizeTagText } from '../src/lib/tagText.js';
 
 /** Per-tag spec when a ticket requests multiple distinct icons/tags. */
 export interface TagVariant {
@@ -126,7 +127,7 @@ export function splitConjoinedSpecs(text: string): string[] {
 /** True when a segment is a short token (e.g. "16", "TP") suitable for list splitting. */
 function isSimpleListItem(segment: string): boolean {
   const value = parseSpecSegment(segment).value.trim();
-  return /^[A-Za-z0-9.]{1,3}$/.test(value);
+  return isTagText(value);
 }
 
 /**
@@ -177,8 +178,8 @@ function variantLabelFrom(
 ): string {
   if (!qualifier && iconHint) {
     const token = iconHint.trim();
-    if (/^[A-Za-z0-9.]{1,3}$/.test(token)) {
-      return token.toUpperCase();
+    if (isTagText(token)) {
+      return sanitizeTagText(token);
     }
   }
 

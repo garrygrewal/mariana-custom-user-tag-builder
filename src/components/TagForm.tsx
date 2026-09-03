@@ -7,6 +7,7 @@ import IconPicker from './IconPicker';
 import ContrastWarnings from './ContrastWarnings';
 import type { ContrastWarning } from '../types';
 import { parseUploadedIconFile } from '../lib/uploadedIcon';
+import { hasDisallowedTagTextChars } from '../lib/tagText';
 import styles from './TagForm.module.css';
 
 interface Props {
@@ -14,8 +15,6 @@ interface Props {
   dispatch: Dispatch<TagAction>;
   warnings: ContrastWarning[];
 }
-
-const INVALID_CHARS_RE = /[^A-Za-z0-9.]/;
 
 export default function TagForm({ state, dispatch, warnings }: Props) {
   const [textError, setTextError] = useState('');
@@ -26,8 +25,10 @@ export default function TagForm({ state, dispatch, warnings }: Props) {
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
-      if (INVALID_CHARS_RE.test(raw)) {
-        setTextError('Only A\u2013Z, 0\u20139, and "." are allowed.');
+      if (hasDisallowedTagTextChars(raw)) {
+        setTextError(
+          'Only letters, numbers, and basic punctuation (e.g. . < > +) are allowed.',
+        );
       } else {
         setTextError('');
       }
@@ -95,7 +96,7 @@ export default function TagForm({ state, dispatch, warnings }: Props) {
 
       {state.mode === 'text' ? (
         <div className={styles.field}>
-          <label htmlFor="tag-text">Text (A-Z, 0-9, .)</label>
+          <label htmlFor="tag-text">Text (letters, numbers, punctuation)</label>
           <input
             id="tag-text"
             type="text"

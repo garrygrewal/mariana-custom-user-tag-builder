@@ -309,4 +309,38 @@ describe('classify', () => {
     );
     expect(c.iconId).not.toBe('nucleo-audio-description');
   });
+
+  it('routes an icon hint of <18 to text mode without stripping the <', () => {
+    const c = classify(
+      req({
+        tagName: 'Under 18',
+        iconHint: '<18',
+        description: 'Title: Under 18\nTag: <18\nBackground: Orange',
+      }),
+      registry,
+    );
+    expect(c.isComplex).toBe(false);
+    expect(c.mode).toBe('text');
+    expect(c.text).toBe('<18');
+    expect(c.confidence).toBe('high');
+    expect(c.fallbackToAi).toBeFalsy();
+  });
+
+  it('routes a 18+ tag name to text mode', () => {
+    const c = classify(req({ tagName: '18+' }), registry);
+    expect(c.mode).toBe('text');
+    expect(c.text).toBe('18+');
+  });
+
+  it('extracts Tag: <18 from the description when form fields omit it', () => {
+    const c = classify(
+      req({
+        tagName: 'Studio Heated Under 18',
+        description: 'Title: Under 18\nTag: <18\nBackground: Orange',
+      }),
+      registry,
+    );
+    expect(c.mode).toBe('text');
+    expect(c.text).toBe('<18');
+  });
 });

@@ -43,8 +43,8 @@ npx playwright install chromium firefox webkit
 Both the builder and the automation produce the same kind of artwork. A request
 is routed one of three ways (see `server/classify.ts`):
 
-1. **Text mode** — content is letters/digits only (≤ 3 chars, e.g. `VIP`, a shoe
-   size, a milestone number). Rendered by the builder; text is converted to
+1. **Text mode** — content is letters, digits, or basic punctuation (≤ 3 chars, e.g. `VIP`, a shoe
+   size, `<18`, `18+`). Rendered by the builder; text is converted to
    vector outlines so it's font-independent.
 2. **Icon mode** — the request matches a glyph in the `icons/` library by id,
    label, or a curated synonym (e.g. "vaccine" → `vaccinated`). Rendered

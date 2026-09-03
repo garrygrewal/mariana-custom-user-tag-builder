@@ -1,4 +1,5 @@
 import type { IconDef } from '../src/types.js';
+import { TAG_TEXT_CAPTURE } from '../src/lib/tagText.js';
 import { extractColor, stripColorLanguage } from './colors.js';
 
 function escapeRegExp(text: string): string {
@@ -103,10 +104,13 @@ export function stripJiraBoilerplate(text: string): string {
   return out.replace(/\s+/g, ' ').trim();
 }
 
-const LETTER_REVISION =
-  /\b(?:letters?|initials?|monogram|acronym|abbreviation)\s+["'\u2018\u2019\u201c\u201d]?[A-Za-z0-9.]{1,3}/i;
-const QUOTED_LETTER_REVISION =
-  /["'\u2018\u2019\u201c\u201d]\s*[A-Za-z0-9.]{1,3}\s*["'\u2018\u2019\u201c\u201d]/;
+const LETTER_REVISION = new RegExp(
+  `\\b(?:letters?|initials?|monogram|acronym|abbreviation)\\s+["'\\u2018\\u2019\\u201c\\u201d]?${TAG_TEXT_CAPTURE}`,
+  'i',
+);
+const QUOTED_LETTER_REVISION = new RegExp(
+  `["'\\u2018\\u2019\\u201c\\u201d]\\s*${TAG_TEXT_CAPTURE}\\s*["'\\u2018\\u2019\\u201c\\u201d]`,
+);
 
 /**
  * True when `/regenerate-tag` notes change the icon or letter brief, not just

@@ -15,13 +15,21 @@ export interface JiraTransition {
   to: { name: string };
 }
 
-/** Reference to an uploaded attachment, including its media-services id. */
+/** Reference to an uploaded attachment, optionally including its media-services id. */
 export interface AttachmentRef {
   /** Numeric Jira attachment id. */
   id: string;
   filename: string;
   /** Media-services file UUID, used to embed the file inline in ADF. */
-  mediaId: string;
+  mediaId?: string;
+}
+
+export interface AddAttachmentOptions {
+  /**
+   * When false, skip resolving the media-services UUID (PNG attachments that
+   * are not embedded in comments). Defaults to true.
+   */
+  resolveMediaId?: boolean;
 }
 
 /** Public surface of the Jira client, so callers/tests can inject a fake. */
@@ -32,6 +40,7 @@ export interface JiraClientLike {
     fileName: string,
     data: Uint8Array,
     mime: string,
+    options?: AddAttachmentOptions,
   ): Promise<AttachmentRef>;
   addComment(key: string, body: AdfDoc): Promise<void>;
   getTransitions(key: string): Promise<JiraTransition[]>;
@@ -95,6 +104,7 @@ export class JiraClient implements JiraClientLike {
     fileName: string,
     data: Uint8Array,
     mime: string,
+    options: AddAttachmentOptions = {},
   ): Promise<AttachmentRef> {
     const form = new FormData();
     // Copy into a fresh ArrayBuffer so Blob gets a clean backing store.
@@ -111,6 +121,9 @@ export class JiraClient implements JiraClientLike {
     const created = (await resp.json()) as Array<{ id?: string }>;
     const id = created[0]?.id;
     if (!id) throw new Error(`Attachment upload for ${fileName} returned no id`);
+    if (options.resolveMediaId === false) {
+      return { id, filename: fileName };
+    }
     const mediaId = await this.resolveMediaId(id);
     return { id, filename: fileName, mediaId };
   }
@@ -118,8 +131,27 @@ export class JiraClient implements JiraClientLike {
   /**
    * Resolve an attachment's media-services file UUID by following the
    * `content` redirect to `api.media.atlassian.com/file/<uuid>/...`.
+   * Retries briefly when media services are not ready immediately after upload.
    */
   private async resolveMediaId(attachmentId: string): Promise<string> {
+    const maxAttempts = 5;
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        return await this.resolveMediaIdOnce(attachmentId);
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        if (attempt < maxAttempts - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 200 * (attempt + 1)));
+        }
+      }
+    }
+
+    throw lastError ?? new Error(`Could not resolve media id for attachment ${attachmentId}`);
+  }
+
+  private async resolveMediaIdOnce(attachmentId: string): Promise<string> {
     const resp = await fetch(
       this.url(`/rest/api/3/attachment/content/${attachmentId}`),
       { method: 'GET', headers: { Authorization: this.authHeader() }, redirect: 'manual' },

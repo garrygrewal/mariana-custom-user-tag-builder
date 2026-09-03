@@ -31,13 +31,17 @@ loadEnvFile('.env.local');
 loadEnvFile('.env');
 
 const issueKey = process.argv[2];
+const revisionNotes = process.argv.slice(3).join(' ').trim() || undefined;
 if (!issueKey) {
-  console.error('Usage: node scripts/process-issue.mjs <ISSUE-KEY>');
+  console.error('Usage: node scripts/process-issue.mjs <ISSUE-KEY> [revision notes]');
   process.exit(1);
 }
 
 const { processTicket } = await import('../server/processTicket.ts');
 
 console.log(`Processing ${issueKey}...`);
-const result = await processTicket(issueKey);
+const result = await processTicket(
+  issueKey,
+  revisionNotes ? { revisionNotes } : {},
+);
 console.log(JSON.stringify(result, null, 2));

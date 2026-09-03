@@ -55,9 +55,10 @@ describe('buildTagSvg — text mode', () => {
   });
 
   it('escapes special XML characters in text', () => {
-    const config = { ...baseConfig, text: 'A' };
+    const config = { ...baseConfig, text: '<18' };
     const svg = buildTagSvg({ config, fgHex: '#000000' });
-    expect(svg).not.toContain('<A>');
+    expect(svg).toContain('>&lt;18</text>');
+    expect(svg).not.toContain('><18</text>');
   });
 });
 

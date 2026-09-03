@@ -1,5 +1,10 @@
 import type { IconDef } from '../src/types.js';
 import { TEXT_MAX_LENGTH } from '../src/constants.js';
+import {
+  isTagText,
+  sanitizeTagText,
+  TAG_TEXT_CAPTURE,
+} from '../src/lib/tagText.js';
 import { isNucleoIconId } from './nucleoIcons.node.js';
 import { iconMatchText, revisionNotesChangeIcon } from './iconIntent.js';
 import type { TagRequest } from './ticket.js';
@@ -186,7 +191,7 @@ const CLOSE_SCORE_MARGIN = 12;
 const ICON_ID_STOP_WORDS = new Set(['test', 'nucleo']);
 
 function normalizeTextToken(token: string): string | null {
-  const cleaned = token.toUpperCase().replace(/[^A-Z0-9.]/g, '');
+  const cleaned = sanitizeTagText(token);
   if (!cleaned || cleaned.length > TEXT_MAX_LENGTH) return null;
   return cleaned;
 }
@@ -427,11 +432,24 @@ function pickIconMatch(
   return null;
 }
 
-const LETTERS_AFTER_INTENT =
-  /\b(?:letters?|initials?|text|abbreviation|monogram|acronym)\s+["'\u2018\u2019\u201c\u201d]?([A-Za-z0-9.]{1,3})["'\u2018\u2019\u201c\u201d]?\b/i;
+const LETTERS_AFTER_INTENT = new RegExp(
+  `\\b(?:letters?|initials?|text|abbreviation|monogram|acronym)\\s+["'\\u2018\\u2019\\u201c\\u201d]?(${TAG_TEXT_CAPTURE})`,
+  'i',
+);
 
-const QUOTED_SHORT_TEXT =
-  /["'\u2018\u2019\u201c\u201d]\s*([A-Za-z0-9.]{1,3})\s*["'\u2018\u2019\u201c\u201d]/;
+const QUOTED_SHORT_TEXT = new RegExp(
+  `["'\\u2018\\u2019\\u201c\\u201d]\\s*(${TAG_TEXT_CAPTURE})\\s*["'\\u2018\\u2019\\u201c\\u201d]`,
+);
+
+const LABELED_TAG_TEXT = new RegExp(
+  `(?:^|\\n)\\s*(?:tag(?:\\s*(?:name|text))?|letters?|initials?|text)\\s*:\\s*(${TAG_TEXT_CAPTURE})\\s*(?:\\n|$)`,
+  'i',
+);
+
+const WHOLE_FIELD_TAG_TEXT = new RegExp(
+  `^(${TAG_TEXT_CAPTURE})(?:\\s*\\([^)]*\\))?$`,
+  'i',
+);
 
 interface ParsedLetters {
   text: string;
@@ -442,8 +460,20 @@ function parseExplicitLetters(text: string): ParsedLetters | null {
   const trimmed = text.trim();
   if (!trimmed) return null;
 
-  if (/^\d{1,3}$/.test(trimmed)) {
-    return { text: trimmed };
+  const wholeField = trimmed.match(WHOLE_FIELD_TAG_TEXT);
+  if (wholeField) {
+    const normalized = normalizeTextToken(wholeField[1]);
+    // Digit/punctuation tokens (`<18`, `18+`, `16`) are literal text. Pure
+    // letter hints like `vip` still go to icon matching from the tag name.
+    if (normalized && /[^A-Z]/.test(normalized)) {
+      return { text: normalized };
+    }
+  }
+
+  const labeled = trimmed.match(LABELED_TAG_TEXT);
+  if (labeled) {
+    const normalized = normalizeTextToken(labeled[1]);
+    return normalized ? { text: normalized } : null;
   }
 
   const afterIntent = trimmed.match(LETTERS_AFTER_INTENT);
@@ -673,7 +703,7 @@ export function classify(req: TagRequest, registry: IconDef[]): Classification {
     }
   }
 
-  if (/^[A-Z0-9.]{1,3}$/.test(req.tagName.trim())) {
+  if (isTagText(req.tagName.trim())) {
     const text = normalizeTextToken(req.tagName);
     if (text) {
       return highTextClassification(

@@ -57,4 +57,9 @@ describe('revisionNotesChangeIcon', () => {
     expect(revisionNotesChangeIcon('use a snake icon instead', registry)).toBe(true);
     expect(revisionNotesChangeIcon('simpler star, darker purple', registry)).toBe(true);
   });
+
+  it('returns true when notes request letter content with punctuation', () => {
+    expect(revisionNotesChangeIcon('text <18', registry)).toBe(true);
+    expect(revisionNotesChangeIcon('letters 18+', registry)).toBe(true);
+  });
 });

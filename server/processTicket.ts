@@ -241,11 +241,15 @@ export async function processTicket(
         new TextEncoder().encode(artifact.svg),
         'image/svg+xml',
       );
+      if (!svgRef.mediaId) {
+        throw new Error(`Missing media id for ${artifact.svgFileName}`);
+      }
       await client.addAttachment(
         issueKey,
         artifact.pngFileName,
         artifact.png,
         'image/png',
+        { resolveMediaId: false },
       );
       const zipBytes = await buildArtifactZip(
         artifact.svg,
@@ -259,6 +263,9 @@ export async function processTicket(
         zipBytes,
         'application/zip',
       );
+      if (!zipRef.mediaId) {
+        throw new Error(`Missing media id for ${artifact.zipFileName}`);
+      }
       commentEmbeds.push({ kind: 'preview', mediaId: svgRef.mediaId });
       commentEmbeds.push({ kind: 'zip', mediaId: zipRef.mediaId });
       reviewOptions.push({

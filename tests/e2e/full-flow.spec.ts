@@ -42,7 +42,7 @@ test.describe('Text mode flow', () => {
   }) => {
     await page.goto('/');
 
-    await page.fill('#tag-text', 'A!');
+    await page.fill('#tag-text', 'A~');
     await expect(page.getByRole('alert')).toBeVisible();
 
     await page.fill('#tag-text', 'AB');

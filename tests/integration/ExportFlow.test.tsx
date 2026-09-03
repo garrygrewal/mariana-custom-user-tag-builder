@@ -34,7 +34,7 @@ describe('Export flow integration', () => {
   it('enables export after filling text', () => {
     render(<App />);
 
-    fireEvent.change(screen.getByLabelText(/text \(a-z/i), {
+    fireEvent.change(screen.getByLabelText(/text \(letters/i), {
       target: { value: 'AB' },
     });
 
@@ -45,7 +45,7 @@ describe('Export flow integration', () => {
   it('calls exportTagZip with correct config on click', async () => {
     render(<App />);
 
-    fireEvent.change(screen.getByLabelText(/text \(a-z/i), {
+    fireEvent.change(screen.getByLabelText(/text \(letters/i), {
       target: { value: 'XY' },
     });
 
@@ -158,20 +158,20 @@ describe('Export flow integration', () => {
   it('shows inline error when invalid text chars are entered', () => {
     render(<App />);
 
-    const textInput = screen.getByLabelText(/text \(a-z/i);
-    fireEvent.change(textInput, { target: { value: 'A!' } });
+    const textInput = screen.getByLabelText(/text \(letters/i);
+    fireEvent.change(textInput, { target: { value: 'A~' } });
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      /only a.z, 0.9, and "\." are allowed/i,
+      /only letters, numbers, and basic punctuation/i,
     );
   });
 
   it('clears inline error when valid text is entered after invalid', () => {
     render(<App />);
 
-    const textInput = screen.getByLabelText(/text \(a-z/i);
+    const textInput = screen.getByLabelText(/text \(letters/i);
 
-    fireEvent.change(textInput, { target: { value: 'A@' } });
+    fireEvent.change(textInput, { target: { value: 'A~' } });
     expect(screen.getByRole('alert')).toBeInTheDocument();
 
     fireEvent.change(textInput, { target: { value: 'AB' } });
@@ -181,7 +181,7 @@ describe('Export flow integration', () => {
   it('accepts "." in text tags and exports dotted text value', async () => {
     render(<App />);
 
-    const textInput = screen.getByLabelText(/text \(a-z/i);
+    const textInput = screen.getByLabelText(/text \(letters/i);
     fireEvent.change(textInput, { target: { value: 'A.' } });
 
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -197,5 +197,26 @@ describe('Export flow integration', () => {
     const call = vi.mocked(exportTagZip).mock.calls[0][0];
     expect(call.mode).toBe('text');
     expect(call.text).toBe('A.');
+  });
+
+  it('accepts "<18" as text and exports it', async () => {
+    render(<App />);
+
+    const textInput = screen.getByLabelText(/text \(letters/i);
+    fireEvent.change(textInput, { target: { value: '<18' } });
+
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    const btn = screen.getByRole('button', { name: /download zip/i });
+    expect(btn).not.toBeDisabled();
+    fireEvent.click(btn);
+
+    await waitFor(() => {
+      expect(exportTagZip).toHaveBeenCalledTimes(1);
+    });
+
+    const call = vi.mocked(exportTagZip).mock.calls[0][0];
+    expect(call.mode).toBe('text');
+    expect(call.text).toBe('<18');
   });
 });
