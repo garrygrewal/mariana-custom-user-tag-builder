@@ -124,6 +124,7 @@ const ICON_SYNONYMS: Record<string, string[]> = {
   'nucleo-sun': ['sun', 'sunny', 'hot'],
   'nucleo-cloud-showers': ['rain', 'rainy', 'weather'],
   'nucleo-ambulance': ['ambulance', 'ems'],
+  'nucleo-ui-headset': ['headset', 'headphones', 'support', 'customer-service'],
 };
 
 /** Library icons that are weak defaults when matched without strong intent. */

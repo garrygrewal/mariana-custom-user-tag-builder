@@ -59,6 +59,45 @@ function collectIconCandidates(text: string): string[] {
   return candidates;
 }
 
+/** Glyphs where the Nucleo UI pack should win over core when both exist. */
+const PREFER_NUCLEO_UI_GLYPHS = new Set(['headset']);
+
+/** Strip Nucleo pack prefixes so we can try UI before core for selected glyphs. */
+function nucleoGlyphBase(candidate: string): string {
+  return candidate.replace(/^nucleo-ui-/, '').replace(/^nucleo-/, '');
+}
+
+function uniqueIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  return ids.filter((id) => {
+    if (!id || seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
+/** Resolve Nucleo pack ids for a candidate token. */
+function nucleoIdVariants(candidate: string): string[] {
+  const base = nucleoGlyphBase(candidate);
+
+  if (candidate.startsWith('nucleo-ui-')) {
+    return uniqueIds([`nucleo-ui-${base}`, candidate]);
+  }
+
+  if (candidate.startsWith('nucleo-')) {
+    if (PREFER_NUCLEO_UI_GLYPHS.has(base)) {
+      return uniqueIds([`nucleo-ui-${base}`, candidate, `nucleo-${base}`]);
+    }
+    return uniqueIds([candidate, `nucleo-${base}`, `nucleo-ui-${base}`]);
+  }
+
+  if (PREFER_NUCLEO_UI_GLYPHS.has(base)) {
+    return uniqueIds([`nucleo-ui-${base}`, `nucleo-${base}`, candidate, base]);
+  }
+
+  return uniqueIds([`nucleo-${base}`, `nucleo-ui-${base}`, candidate, base]);
+}
+
 /**
  * Resolve an explicit library icon id from free text (revision notes, icon field).
  * Returns null when no registered icon matches.
@@ -71,12 +110,17 @@ export function resolveExplicitIconId(
   const candidates = collectIconCandidates(text);
 
   for (const candidate of candidates) {
+    const base = nucleoGlyphBase(candidate);
+    if (PREFER_NUCLEO_UI_GLYPHS.has(base)) {
+      const uiId = `nucleo-ui-${base}`;
+      if (ids.has(uiId)) return uiId;
+    }
+
     if (ids.has(candidate)) return candidate;
 
-    const withNucleo = candidate.startsWith('nucleo-')
-      ? candidate
-      : `nucleo-${candidate}`;
-    if (ids.has(withNucleo)) return withNucleo;
+    for (const variant of nucleoIdVariants(candidate)) {
+      if (ids.has(variant)) return variant;
+    }
 
     if (candidate.startsWith('nucleo-')) {
       const withoutNucleo = candidate.slice('nucleo-'.length);

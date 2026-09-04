@@ -34,6 +34,13 @@ describe('resolveExplicitIconId', () => {
   it('resolves use-a-icon phrasing with an article', () => {
     expect(resolveExplicitIconId('use a snake icon instead', registry)).toBe('nucleo-snake');
   });
+
+  it('prefers Nucleo UI headset over core when both exist', () => {
+    expect(resolveExplicitIconId('use headset icon from library', registry)).toBe(
+      'nucleo-ui-headset',
+    );
+    expect(resolveExplicitIconId('nucleo-headset', registry)).toBe('nucleo-ui-headset');
+  });
 });
 
 describe('stripJiraBoilerplate', () => {

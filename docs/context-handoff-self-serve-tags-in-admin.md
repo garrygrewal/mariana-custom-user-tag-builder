@@ -110,7 +110,9 @@ Two tiers:
 - **~3,200 Nucleo glyphs**, licensed and bundled, reachable only by the
   server-side generator today. Organized into categories (accessibility,
   animals-nature, arrows, and so on) with fill and outline variants at multiple
-  sizes; the loader prefers the filled 32px variant. This is a general-purpose
+  sizes; the loader prefers the filled 32px variant. A separate **Nucleo UI**
+  pack (`icons/nucleo_ui_svg_v1.8.0/`, ~16k glyphs, `nucleo-ui-*` ids) prefers
+  filled 18px; `headset` resolves to the UI shopping glyph over core.
   icon vocabulary: crowns for VIP, faces and emoji, sports equipment, pets,
   weather, pregnancy, and much more.
 

@@ -3,10 +3,19 @@ import { basename, relative, resolve } from 'node:path';
 import type { IconDef } from '../src/types.js';
 import { resolveProjectPath } from './paths.js';
 
-const NUCLEO_SUBDIR = 'nucleo_core_svg_v1.7.0';
-const PREFERRED_SIZE = 32;
-
 export const NUCLEO_ID_PREFIX = 'nucleo-';
+
+interface NucleoPackConfig {
+  subdir: string;
+  /** Registry id prefix, e.g. `nucleo-` or `nucleo-ui-`. */
+  idPrefix: string;
+  preferredSize: number;
+}
+
+const NUCLEO_PACKS: NucleoPackConfig[] = [
+  { subdir: 'nucleo_core_svg_v1.7.0', idPrefix: 'nucleo-', preferredSize: 32 },
+  { subdir: 'nucleo_ui_svg_v1.8.0', idPrefix: 'nucleo-ui-', preferredSize: 18 },
+];
 
 /** Supports both single- and double-quoted viewBox attributes. */
 function parseViewBox(svg: string): string {
@@ -18,15 +27,14 @@ interface NucleoCandidate {
   name: string;
   filePath: string;
   size: number;
-  /** fill=0, outline=1 */
   variantRank: number;
 }
 
 let pathIndexCache: Map<string, string> | null = null;
 let registryCache: IconDef[] | null = null;
 
-function nucleoIdFromName(name: string): string {
-  return `${NUCLEO_ID_PREFIX}${name.replace(/_/g, '-')}`;
+function nucleoIdFromName(name: string, idPrefix: string): string {
+  return `${idPrefix}${name.replace(/_/g, '-')}`;
 }
 
 function scanNucleoFiles(root: string): string[] {
@@ -42,11 +50,19 @@ function scanNucleoFiles(root: string): string[] {
   return out;
 }
 
-function pickBest(candidates: NucleoCandidate[]): NucleoCandidate {
+function variantRankFromRel(rel: string): number {
+  if (rel.startsWith('fill/')) return 0;
+  if (rel.startsWith('outline-duo/')) return 3;
+  if (rel.startsWith('outline/')) return 1;
+  if (rel.startsWith('glyph-duo/')) return 2;
+  return 4;
+}
+
+function pickBest(candidates: NucleoCandidate[], preferredSize: number): NucleoCandidate {
   return [...candidates].sort((a, b) => {
     if (a.variantRank !== b.variantRank) return a.variantRank - b.variantRank;
-    const aDist = Math.abs(a.size - PREFERRED_SIZE);
-    const bDist = Math.abs(b.size - PREFERRED_SIZE);
+    const aDist = Math.abs(a.size - preferredSize);
+    const bDist = Math.abs(b.size - preferredSize);
     if (aDist !== bDist) return aDist - bDist;
     return a.size - b.size;
   })[0];
@@ -56,16 +72,13 @@ function labelFromNucleoName(name: string): string {
   return name.replace(/[-_]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function buildPathIndex(): Map<string, string> {
-  if (pathIndexCache) return pathIndexCache;
-
-  const root = resolveProjectPath('icons', NUCLEO_SUBDIR);
+function indexPack(pack: NucleoPackConfig, index: Map<string, string>): void {
+  const root = resolveProjectPath('icons', pack.subdir);
   let files: string[] = [];
   try {
     files = scanNucleoFiles(root);
   } catch {
-    pathIndexCache = new Map();
-    return pathIndexCache;
+    return;
   }
 
   const byName = new Map<string, NucleoCandidate[]>();
@@ -75,29 +88,36 @@ function buildPathIndex(): Map<string, string> {
     if (!m) continue;
 
     const rel = relative(root, filePath).replace(/\\/g, '/');
-    const isFill = rel.startsWith('fill/');
     const candidate: NucleoCandidate = {
       name: m[2],
       filePath,
       size: Number(m[1]),
-      variantRank: isFill ? 0 : 1,
+      variantRank: variantRankFromRel(rel),
     };
     const list = byName.get(m[2]) ?? [];
     list.push(candidate);
     byName.set(m[2], list);
   }
 
-  pathIndexCache = new Map();
   for (const [name, candidates] of byName) {
-    const best = pickBest(candidates);
-    pathIndexCache.set(nucleoIdFromName(name), best.filePath);
+    const best = pickBest(candidates, pack.preferredSize);
+    index.set(nucleoIdFromName(name, pack.idPrefix), best.filePath);
+  }
+}
+
+function buildPathIndex(): Map<string, string> {
+  if (pathIndexCache) return pathIndexCache;
+
+  pathIndexCache = new Map();
+  for (const pack of NUCLEO_PACKS) {
+    indexPack(pack, pathIndexCache);
   }
   return pathIndexCache;
 }
 
 /**
  * Lightweight Nucleo registry entries (SVG loaded on demand via hydrateNucleoIcon).
- * Returns an empty list when the Nucleo export folder is absent.
+ * Returns an empty list when no Nucleo export folders are present.
  */
 export function loadNucleoIconRegistry(): IconDef[] {
   if (registryCache) return registryCache;
@@ -105,7 +125,9 @@ export function loadNucleoIconRegistry(): IconDef[] {
   const index = buildPathIndex();
   registryCache = [...index.keys()]
     .map((id) => {
-      const name = id.slice(NUCLEO_ID_PREFIX.length);
+      const prefix = NUCLEO_PACKS.find((pack) => id.startsWith(pack.idPrefix))?.idPrefix
+        ?? NUCLEO_ID_PREFIX;
+      const name = id.slice(prefix.length);
       return {
         id,
         label: labelFromNucleoName(name),

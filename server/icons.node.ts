@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { IconDef } from '../src/types.js';
 import {
+  clearNucleoIconCache,
   hydrateNucleoIcon,
   isNucleoIconId,
   loadNucleoIconRegistry,
@@ -61,8 +62,9 @@ function loadCuratedIconRegistry(): IconDef[] {
 }
 
 /**
- * Curated `icons/*.svg` plus lazy Nucleo entries from `icons/nucleo_core_svg_v1.7.0/`.
- * Nucleo SVGs are read from disk on first render via getIconById.
+ * Curated `icons/*.svg` plus lazy Nucleo entries from `icons/nucleo_core_svg_v1.7.0/`
+ * and `icons/nucleo_ui_svg_v1.8.0/`. Nucleo SVGs are read from disk on first render
+ * via getIconById.
  */
 export function loadIconRegistry(): IconDef[] {
   if (mergedCache) return mergedCache;
@@ -81,4 +83,5 @@ export function getIconById(iconId: string): IconDef | null {
 export function clearIconRegistryCache(): void {
   curatedCache = null;
   mergedCache = null;
+  clearNucleoIconCache();
 }
